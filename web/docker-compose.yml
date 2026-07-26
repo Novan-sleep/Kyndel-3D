@@ -1,0 +1,33 @@
+services:
+  server:
+    build: ./server
+    restart: unless-stopped
+    env_file:
+      - ./server/.env
+    volumes:
+      - server-data:/app/data
+    # No ports published to the host — only the client (nginx) and cloudflared
+    # need to reach it, both over the internal compose network.
+
+  client:
+    build:
+      context: ./client
+    restart: unless-stopped
+    depends_on:
+      - server
+    # Uncomment to reach the dashboard directly at http://<mini-pc>:8080
+    # while setting up the Cloudflare Tunnel, before it's wired up:
+    # ports:
+    #   - "8080:80"
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    command: tunnel run
+    environment:
+      - TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN}
+    depends_on:
+      - client
+
+volumes:
+  server-data:

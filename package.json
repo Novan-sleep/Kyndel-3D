@@ -1,0 +1,38 @@
+{
+  "name": "kyndel-3d",
+  "version": "2.0.0",
+  "description": "Aplikasi Manajemen Jasa 3D Printing KYndel 3D",
+  "main": "./out/main/index.js",
+  "author": "KYndel 3D",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "preview": "electron-vite preview",
+    "dist": "npm run build && electron-builder"
+  },
+  "dependencies": {
+    "@electron-toolkit/preload": "^3.0.2",
+    "@electron-toolkit/utils": "^4.0.0",
+    "better-sqlite3": "^11.10.0",
+    "mqtt": "^5.15.1",
+    "nanoid": "^3.3.8",
+    "recharts": "^3.8.1"
+  },
+  "devDependencies": {
+    "@electron-toolkit/eslint-config": "^1.0.2",
+    "@electron-toolkit/tsconfig": "^2.0.0",
+    "@electron/rebuild": "^4.0.4",
+    "@types/better-sqlite3": "^7.6.8",
+    "@types/node": "^20.14.8",
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
+    "@vitejs/plugin-react": "^4.3.1",
+    "electron": "^32.3.3",
+    "electron-builder": "^24.13.3",
+    "electron-vite": "^2.3.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "typescript": "^5.5.3",
+    "vite": "^5.3.3"
+  }
+}

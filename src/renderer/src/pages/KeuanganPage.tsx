@@ -1,0 +1,420 @@
+import { useState, useEffect, useCallback, useMemo } from 'react'
+import { api, formatRp, formatTgl } from '../lib/api'
+import { Transaksi } from '../types'
+import ConfirmDialog from '../components/ui/ConfirmDialog'
+import EmptyState from '../components/ui/EmptyState'
+
+type ChartPeriod = 'minggu' | 'bulan' | 'tahun'
+
+interface ChartPoint {
+  label: string
+  penjualan: number
+  pengeluaran: number
+  profit: number
+}
+
+function fmtShort(n: number): string {
+  const abs = Math.abs(n)
+  const sign = n < 0 ? '-' : ''
+  if (abs >= 1_000_000_000) return `${sign}${(abs / 1_000_000_000).toFixed(1)}M`
+  if (abs >= 1_000_000) return `${sign}${(abs / 1_000_000).toFixed(1)}jt`
+  if (abs >= 1_000) return `${sign}${(abs / 1_000).toFixed(0)}rb`
+  return `${sign}${abs}`
+}
+
+function LineChart({ data, loading }: { data: ChartPoint[]; loading: boolean }) {
+  const [hoverIdx, setHoverIdx] = useState<number | null>(null)
+
+  const W = 900, H = 260
+  const padL = 72, padR = 20, padT = 16, padB = 36
+  const chartW = W - padL - padR
+  const chartH = H - padT - padB
+
+  const allVals = data.flatMap(d => [d.penjualan, d.pengeluaran, d.profit])
+  const maxVal = Math.max(...allVals, 1)
+  const minVal = Math.min(...allVals, 0)
+  const range = maxVal - minVal || 1
+
+  const xPos = (i: number) =>
+    data.length <= 1 ? padL + chartW / 2 : padL + (i / (data.length - 1)) * chartW
+  const yPos = (v: number) => padT + chartH - ((v - minVal) / range) * chartH
+
+  const makePath = (key: keyof Omit<ChartPoint, 'label'>) =>
+    data.map((d, i) => `${i === 0 ? 'M' : 'L'}${xPos(i).toFixed(1)},${yPos(d[key]).toFixed(1)}`).join(' ')
+
+  const TICKS = 5
+  const yTicks = Array.from({ length: TICKS + 1 }, (_, i) => minVal + (i / TICKS) * range)
+  const xStep = data.length > 20 ? 5 : data.length > 12 ? 2 : 1
+
+  if (loading) return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
+      <span className="spinner" />
+    </div>
+  )
+
+  const hasData = data.some(d => d.penjualan > 0 || d.pengeluaran > 0)
+  if (!hasData) return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--text-muted)', fontSize: 13 }}>
+      Belum ada data untuk periode ini
+    </div>
+  )
+
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: '100%' }}
+      onMouseLeave={() => setHoverIdx(null)}>
+
+      {/* Y grid */}
+      {yTicks.map((tick, i) => (
+        <g key={i}>
+          <line
+            x1={padL} y1={yPos(tick).toFixed(1)} x2={W - padR} y2={yPos(tick).toFixed(1)}
+            style={{ stroke: tick === 0 ? 'var(--border)' : 'var(--border-subtle)', strokeWidth: tick === 0 ? 1 : 0.5 }}
+          />
+          <text x={padL - 6} y={(yPos(tick) + 4).toFixed(1)}
+            textAnchor="end" fontSize={9} style={{ fill: 'var(--text-muted)' }}>
+            {fmtShort(tick)}
+          </text>
+        </g>
+      ))}
+
+      {/* X labels */}
+      {data.map((d, i) => i % xStep === 0 && (
+        <text key={i} x={xPos(i).toFixed(1)} y={H - padB + 14}
+          textAnchor="middle" fontSize={9} style={{ fill: 'var(--text-muted)' }}>
+          {d.label}
+        </text>
+      ))}
+
+      {/* Area fills (subtle) */}
+      <path
+        d={`${makePath('penjualan')} L${(padL + chartW).toFixed(1)},${(padT + chartH).toFixed(1)} L${padL},${(padT + chartH).toFixed(1)} Z`}
+        style={{ fill: 'var(--success)', opacity: 0.04 }}
+      />
+      <path
+        d={`${makePath('pengeluaran')} L${(padL + chartW).toFixed(1)},${(padT + chartH).toFixed(1)} L${padL},${(padT + chartH).toFixed(1)} Z`}
+        style={{ fill: 'var(--danger)', opacity: 0.04 }}
+      />
+
+      {/* Lines */}
+      <path d={makePath('penjualan')} style={{ fill: 'none', stroke: 'var(--success)', strokeWidth: 2, strokeLinecap: 'round', strokeLinejoin: 'round' }} />
+      <path d={makePath('pengeluaran')} style={{ fill: 'none', stroke: 'var(--danger)', strokeWidth: 2, strokeLinecap: 'round', strokeLinejoin: 'round' }} />
+      <path d={makePath('profit')} style={{ fill: 'none', stroke: 'var(--accent)', strokeWidth: 2, strokeLinecap: 'round', strokeLinejoin: 'round', strokeDasharray: minVal < 0 ? '5 3' : 'none' }} />
+
+      {/* Hover zones */}
+      {data.map((_, i) => {
+        const zoneW = data.length > 1 ? chartW / data.length : chartW
+        return (
+          <rect key={i}
+            x={(xPos(i) - zoneW / 2).toFixed(1)} y={padT}
+            width={zoneW.toFixed(1)} height={chartH}
+            style={{ fill: 'transparent', cursor: 'crosshair' }}
+            onMouseEnter={() => setHoverIdx(i)}
+          />
+        )
+      })}
+
+      {/* Hover overlay */}
+      {hoverIdx !== null && (() => {
+        const d = data[hoverIdx]
+        const x = xPos(hoverIdx)
+        const ttW = 168, ttH = 96
+        const ttX = x + ttW + 14 > W - padR ? x - ttW - 10 : x + 10
+        const ttY = padT + 8
+        return (
+          <g>
+            <line x1={x.toFixed(1)} y1={padT} x2={x.toFixed(1)} y2={(padT + chartH).toFixed(1)}
+              style={{ stroke: 'var(--border)', strokeWidth: 1, strokeDasharray: '3 3' }} />
+            <circle cx={x.toFixed(1)} cy={yPos(d.penjualan).toFixed(1)} r={4} style={{ fill: 'var(--success)' }} />
+            <circle cx={x.toFixed(1)} cy={yPos(d.pengeluaran).toFixed(1)} r={4} style={{ fill: 'var(--danger)' }} />
+            <circle cx={x.toFixed(1)} cy={yPos(d.profit).toFixed(1)} r={4} style={{ fill: 'var(--accent)' }} />
+            {/* Tooltip box */}
+            <rect x={ttX} y={ttY} width={ttW} height={ttH} rx={7}
+              style={{ fill: 'var(--bg-surface-2)', stroke: 'var(--border)', strokeWidth: 1 }} />
+            <text x={ttX + 10} y={ttY + 17} fontSize={10} fontWeight={700} style={{ fill: 'var(--text-primary)' }}>{d.label}</text>
+            <circle cx={ttX + 12} cy={ttY + 33} r={3} style={{ fill: 'var(--success)' }} />
+            <text x={ttX + 21} y={ttY + 37} fontSize={9} style={{ fill: 'var(--text-secondary)' }}>Penjualan: {fmtShort(d.penjualan)}</text>
+            <circle cx={ttX + 12} cy={ttY + 52} r={3} style={{ fill: 'var(--danger)' }} />
+            <text x={ttX + 21} y={ttY + 56} fontSize={9} style={{ fill: 'var(--text-secondary)' }}>Pengeluaran: {fmtShort(d.pengeluaran)}</text>
+            <circle cx={ttX + 12} cy={ttY + 71} r={3} style={{ fill: 'var(--accent)' }} />
+            <text x={ttX + 21} y={ttY + 75} fontSize={9} style={{ fill: 'var(--text-secondary)' }}>Profit: {fmtShort(d.profit)}</text>
+          </g>
+        )
+      })()}
+    </svg>
+  )
+}
+
+export default function KeuanganPage() {
+  const [transaksis, setTransaksis] = useState<Transaksi[]>([])
+  const [allTransaksi, setAllTransaksi] = useState<Transaksi[]>([])
+  const [loading, setLoading] = useState(true)
+  const [chartLoading, setChartLoading] = useState(false)
+  const [showForm, setShowForm] = useState(false)
+  const [confirm, setConfirm] = useState<Transaksi | null>(null)
+  const [error, setError] = useState('')
+  const [bulan, setBulan] = useState(new Date().toISOString().slice(0, 7))
+  const [chartPeriod, setChartPeriod] = useState<ChartPeriod>('bulan')
+  const [form, setForm] = useState({ jenis: 'pengeluaran', nama: '', kategori: '', jumlah: '', tanggal: new Date().toISOString().split('T')[0] })
+
+  const load = useCallback(async () => {
+    setLoading(true)
+    const res = await api.transaksi.getByBulan(bulan)
+    if (res.success) setTransaksis(res.data)
+    setLoading(false)
+  }, [bulan])
+
+  const loadAll = useCallback(async () => {
+    setChartLoading(true)
+    const res = await api.transaksi.getAll()
+    if (res.success) setAllTransaksi(res.data)
+    setChartLoading(false)
+  }, [])
+
+  useEffect(() => { load() }, [load])
+  useEffect(() => { loadAll() }, [loadAll])
+
+  const totalPenjualan = transaksis.filter(t => t.jenis === 'pendapatan' && t.isAutoGenerated).reduce((a, t) => a + t.jumlah, 0)
+  const pendapatan     = transaksis.filter(t => t.jenis === 'pendapatan').reduce((a, t) => a + (t.isAutoGenerated ? t.jumlah - (t.hppSnapshot ?? 0) : t.jumlah), 0)
+  const pengeluaran    = transaksis.filter(t => t.jenis === 'pengeluaran').reduce((a, t) => a + t.jumlah, 0)
+  const profit = pendapatan - pengeluaran
+
+  const chartData = useMemo<ChartPoint[]>(() => {
+    const group = (txs: Transaksi[]) => {
+      const penjualan   = txs.filter(t => t.jenis === 'pendapatan' && t.isAutoGenerated).reduce((a, t) => a + t.jumlah, 0)
+      const pendapatan  = txs.filter(t => t.jenis === 'pendapatan').reduce((a, t) => a + (t.isAutoGenerated ? t.jumlah - (t.hppSnapshot ?? 0) : t.jumlah), 0)
+      const pengeluaran = txs.filter(t => t.jenis === 'pengeluaran').reduce((a, t) => a + t.jumlah, 0)
+      return { penjualan, pengeluaran, profit: pendapatan - pengeluaran }
+    }
+
+    if (chartPeriod === 'minggu') {
+      return Array.from({ length: 7 }, (_, i) => {
+        const d = new Date(); d.setDate(d.getDate() - 6 + i)
+        const dateStr = d.toISOString().split('T')[0]
+        return {
+          label: new Intl.DateTimeFormat('id-ID', { weekday: 'short', day: 'numeric' }).format(d),
+          ...group(allTransaksi.filter(t => t.tanggal.startsWith(dateStr)))
+        }
+      })
+    }
+
+    if (chartPeriod === 'bulan') {
+      const [yr, mo] = bulan.split('-').map(Number)
+      const days = new Date(yr, mo, 0).getDate()
+      return Array.from({ length: days }, (_, i) => {
+        const dateStr = `${bulan}-${String(i + 1).padStart(2, '0')}`
+        return { label: `${i + 1}`, ...group(allTransaksi.filter(t => t.tanggal.startsWith(dateStr))) }
+      })
+    }
+
+    // tahun
+    const year = bulan.split('-')[0]
+    const months = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des']
+    return Array.from({ length: 12 }, (_, i) => {
+      const mStr = `${year}-${String(i + 1).padStart(2, '0')}`
+      return { label: months[i], ...group(allTransaksi.filter(t => t.tanggal.startsWith(mStr))) }
+    })
+  }, [chartPeriod, bulan, allTransaksi])
+
+  const handleSubmit = async () => {
+    setError('')
+    const res = await api.transaksi.createManual({ jenis: form.jenis, nama: form.nama, kategori: form.kategori || undefined, jumlah: +form.jumlah, tanggal: form.tanggal })
+    if (res.success) {
+      setShowForm(false)
+      setForm({ jenis: 'pengeluaran', nama: '', kategori: '', jumlah: '', tanggal: new Date().toISOString().split('T')[0] })
+      load(); loadAll()
+    } else setError(res.error)
+  }
+
+  const periodLabel = chartPeriod === 'minggu' ? '7 Hari Terakhir'
+    : chartPeriod === 'bulan' ? new Intl.DateTimeFormat('id-ID', { month: 'long', year: 'numeric' }).format(new Date(bulan + '-01'))
+    : `Tahun ${bulan.split('-')[0]}`
+
+  if (loading) return <div className="page-loading"><div className="spinner" /><span>Memuat keuangan...</span></div>
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-md)' }}>
+
+      {/* Top bar */}
+      <div className="animate-fade-up" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <label className="form-label" style={{ margin: 0 }}>Bulan:</label>
+          <input type="month" value={bulan} onChange={e => setBulan(e.target.value)} style={{ width: 'auto' }} />
+        </div>
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <button className="btn btn-secondary" onClick={() => api.laporan.keuanganBulan(bulan)} title="Cetak laporan keuangan bulan ini sebagai PDF">
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M4 7V3a1 1 0 011-1h6a1 1 0 011 1v4"/>
+              <path d="M2 7h12a1 1 0 011 1v4a1 1 0 01-1 1H2a1 1 0 01-1-1V8a1 1 0 011-1z"/>
+              <path d="M4.5 14v-2h7v2"/>
+            </svg>
+            Cetak Laporan
+          </button>
+          <button className="btn btn-secondary" onClick={() => api.export.transaksi()} title="Export semua transaksi ke CSV">
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M8 2v8M5 7l3 3 3-3M3 13h10"/>
+            </svg>
+            CSV
+          </button>
+          <button className="btn btn-primary" onClick={() => setShowForm(true)}>
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+              <line x1="8" y1="2" x2="8" y2="14"/><line x1="2" y1="8" x2="14" y2="8"/>
+            </svg>
+            Catat Transaksi
+          </button>
+        </div>
+      </div>
+
+      {/* KPI cards: 4 columns */}
+      <div className="animate-fade-up-1" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 'var(--spacing-md)' }}>
+        {/* Total Penjualan Kotor */}
+        <div className="kpi-card" style={{ background: 'linear-gradient(135deg, var(--teal-light), transparent)' }}>
+          <div className="kpi-card-accent" style={{ background: 'var(--teal)' }} />
+          <div className="kpi-label" style={{ color: 'var(--teal)' }}>Total Penjualan Kotor</div>
+          <div className="kpi-value" style={{ color: 'var(--teal)', fontSize: '20px' }}>{formatRp(totalPenjualan)}</div>
+          <div style={{ fontSize: '10px', color: 'var(--text-muted)', marginTop: '4px' }}>Dari pesanan selesai</div>
+        </div>
+
+        {([
+          ['Pendapatan', pendapatan, 'var(--success)'],
+          ['Pengeluaran', pengeluaran, 'var(--danger)'],
+          ['Profit', profit, profit >= 0 ? 'var(--success)' : 'var(--danger)'],
+        ] as [string, number, string][]).map(([label, val, color]) => (
+          <div key={label} className="kpi-card">
+            <div className="kpi-card-accent" style={{ background: color }} />
+            <div className="kpi-label">{label}</div>
+            <div className="kpi-value" style={{ color, fontSize: '20px' }}>{formatRp(val)}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Chart */}
+      <div className="card animate-fade-up-2" style={{ padding: 'var(--spacing-lg)' }}>
+        {/* Chart header */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '14px' }}>
+          <div>
+            <h3 style={{ fontFamily: "'Sora', sans-serif", fontSize: '14px', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '2px' }}>
+              Grafik Keuangan
+            </h3>
+            <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{periodLabel}</div>
+          </div>
+          <div style={{ display: 'flex', gap: '4px' }}>
+            {(['minggu', 'bulan', 'tahun'] as ChartPeriod[]).map(p => (
+              <button key={p}
+                className={`btn btn-sm ${chartPeriod === p ? 'btn-primary' : 'btn-secondary'}`}
+                onClick={() => setChartPeriod(p)}
+                style={{ fontSize: '11px', padding: '4px 12px' }}>
+                {p === 'minggu' ? 'Minggu' : p === 'bulan' ? 'Bulan' : 'Tahun'}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Legend */}
+        <div style={{ display: 'flex', gap: '20px', marginBottom: '12px' }}>
+          {[
+            { color: 'var(--success)', label: 'Total Penjualan' },
+            { color: 'var(--danger)',  label: 'Pengeluaran' },
+            { color: 'var(--accent)',  label: 'Profit' },
+          ].map(({ color, label }) => (
+            <div key={label} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <div style={{ width: 24, height: 2.5, background: color, borderRadius: 2 }} />
+              <span style={{ fontSize: '11px', color: 'var(--text-secondary)', fontWeight: 500 }}>{label}</span>
+            </div>
+          ))}
+        </div>
+
+        {/* SVG chart */}
+        <div style={{ height: 260, width: '100%' }}>
+          <LineChart data={chartData} loading={chartLoading} />
+        </div>
+      </div>
+
+      {error && <div className="alert alert-danger">{error}</div>}
+
+      {/* Transaction list */}
+      {transaksis.length === 0 ? <EmptyState message="Belum ada transaksi bulan ini" icon="keuangan" /> : (
+        <div className="animate-fade-up-2 card" style={{ overflow: 'hidden' }}>
+          {transaksis.map((t, i) => (
+            <div key={t.id} className="row-hover" style={{
+              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+              padding: '12px var(--spacing-lg)',
+              borderBottom: i < transaksis.length - 1 ? '1px solid var(--border-subtle)' : 'none',
+              borderLeft: `3px solid ${t.jenis === 'pendapatan' ? 'var(--success)' : 'var(--danger)'}`,
+            }}>
+              <div>
+                <div style={{ fontWeight: 500, fontSize: '13px', marginBottom: '2px' }}>{t.nama}</div>
+                <div style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  {formatTgl(t.tanggal)}{t.kategori ? ` · ${t.kategori}` : ''}
+                  {t.isAutoGenerated && (
+                    <span style={{ padding: '1px 6px', background: 'var(--accent-light)', color: 'var(--accent)', borderRadius: 'var(--radius-full)', fontSize: '10px', fontWeight: 700 }}>Auto</span>
+                  )}
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                <span style={{ fontWeight: 700, fontSize: '14px', color: t.jenis === 'pendapatan' ? 'var(--success)' : 'var(--danger)', fontFamily: "'Sora', sans-serif" }}>
+                  {t.jenis === 'pendapatan' ? '+' : '−'}{formatRp(t.jumlah)}
+                </span>
+                {!t.isAutoGenerated && (
+                  <button className="btn btn-xs" style={{ background: 'var(--danger-light)', color: 'var(--danger)' }} onClick={() => setConfirm(t)}>Hapus</button>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Modal form */}
+      {showForm && (
+        <div className="modal-overlay">
+          <div className="modal-box" style={{ width: '420px' }}>
+            <div className="modal-header">
+              <h3>Catat Transaksi Manual</h3>
+              <button className="modal-close" onClick={() => { setShowForm(false); setError('') }}>✕</button>
+            </div>
+            <div className="modal-body">
+              {error && <div className="alert alert-danger" style={{ marginBottom: 12 }}>{error}</div>}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: 'var(--spacing-lg)' }}>
+                <div>
+                  <label className="form-label">Jenis</label>
+                  <select value={form.jenis} onChange={e => setForm(f => ({ ...f, jenis: e.target.value }))}>
+                    <option value="pendapatan">Pendapatan</option>
+                    <option value="pengeluaran">Pengeluaran</option>
+                  </select>
+                </div>
+                {([{ label: 'Nama', key: 'nama', required: true }, { label: 'Kategori', key: 'kategori' }] as { label: string; key: string; required?: boolean }[]).map(({ label, key, required }) => (
+                  <div key={key}>
+                    <label className="form-label">{label}{required && <span style={{ color: 'var(--danger)', marginLeft: 2 }}>*</span>}</label>
+                    <input value={(form as any)[key]} onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))} />
+                  </div>
+                ))}
+                <div>
+                  <label className="form-label">Jumlah (Rp) <span style={{ color: 'var(--danger)' }}>*</span></label>
+                  <input type="number" value={form.jumlah} onChange={e => setForm(f => ({ ...f, jumlah: e.target.value }))} />
+                </div>
+                <div>
+                  <label className="form-label">Tanggal <span style={{ color: 'var(--danger)' }}>*</span></label>
+                  <input type="date" value={form.tanggal} onChange={e => setForm(f => ({ ...f, tanggal: e.target.value }))} />
+                </div>
+              </div>
+              <div className="modal-footer">
+                <button className="btn btn-secondary btn-sm" onClick={() => { setShowForm(false); setError('') }}>Batal</button>
+                <button className="btn btn-primary btn-sm" onClick={handleSubmit}>Simpan</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {confirm && (
+        <ConfirmDialog
+          title="Hapus Transaksi"
+          message={`Hapus transaksi "${confirm.nama}"?`}
+          onConfirm={async () => { await api.transaksi.delete(confirm.id); setConfirm(null); load(); loadAll() }}
+          onCancel={() => setConfirm(null)}
+          confirmLabel="Hapus"
+          danger
+        />
+      )}
+    </div>
+  )
+}

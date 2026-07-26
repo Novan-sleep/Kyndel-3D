@@ -1,0 +1,23 @@
+appId: com.kyndel3d.app
+productName: KYndel 3D
+directories:
+  output: dist
+  buildResources: build
+files:
+  - filter:
+      - out/**/*
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+  icon: build/icon.ico
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  installerIcon: build/icon.ico
+  uninstallerIcon: build/icon.ico
+  installerHeaderIcon: build/icon.ico
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: KYndel 3D
