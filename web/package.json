@@ -1,0 +1,15 @@
+{
+  "name": "kyndel-3d-web",
+  "private": true,
+  "description": "Docker helper scripts for the web dashboard (client + server + cloudflared)",
+  "scripts": {
+    "docker:build": "docker compose build",
+    "docker:build:no-cache": "docker compose build --no-cache",
+    "docker:up": "docker compose up -d",
+    "docker:rebuild": "docker compose up -d --build",
+    "docker:down": "docker compose down",
+    "docker:restart": "docker compose restart",
+    "docker:logs": "docker compose logs -f",
+    "docker:ps": "docker compose ps"
+  }
+}

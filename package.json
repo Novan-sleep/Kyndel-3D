@@ -13,7 +13,7 @@
   "dependencies": {
     "@electron-toolkit/preload": "^3.0.2",
     "@electron-toolkit/utils": "^4.0.0",
-    "better-sqlite3": "^11.10.0",
+    "better-sqlite3": "^12.11.1",
     "mqtt": "^5.15.1",
     "nanoid": "^3.3.8",
     "recharts": "^3.8.1"

@@ -6,6 +6,10 @@ export const fetchPesanan = createAsyncThunk('pesanan/fetchAll', async () => api
 
 export const createPesanan = createAsyncThunk('pesanan/create', async (payload: Record<string, unknown>) => api.post<Pesanan>('/pesanan', payload))
 
+export const updatePesanan = createAsyncThunk('pesanan/update', async ({ id, payload }: { id: string; payload: Record<string, unknown> }) => api.put<Pesanan>(`/pesanan/${id}`, payload))
+
+export const updateMetaPesanan = createAsyncThunk('pesanan/updateMeta', async ({ id, payload }: { id: string; payload: { catatan?: string; deadline?: string } }) => api.put<Pesanan>(`/pesanan/${id}/meta`, payload))
+
 export const mulaiPrinting = createAsyncThunk('pesanan/mulaiPrinting', async (id: string) => api.post<Pesanan>(`/pesanan/${id}/mulai-printing`))
 
 export const selesaikanPesanan = createAsyncThunk('pesanan/selesaikan', async (id: string) => api.post<Pesanan>(`/pesanan/${id}/selesaikan`))
@@ -38,6 +42,8 @@ const pesananSlice = createSlice({
       .addCase(fetchPesanan.fulfilled, (state, action) => { state.status = 'idle'; state.items = action.payload })
       .addCase(fetchPesanan.rejected, (state, action) => { state.status = 'error'; state.error = action.error.message ?? 'Gagal memuat pesanan' })
       .addCase(createPesanan.fulfilled, (state, action) => upsert(state, action.payload))
+      .addCase(updatePesanan.fulfilled, (state, action) => upsert(state, action.payload))
+      .addCase(updateMetaPesanan.fulfilled, (state, action) => upsert(state, action.payload))
       .addCase(mulaiPrinting.fulfilled, (state, action) => upsert(state, action.payload))
       .addCase(selesaikanPesanan.fulfilled, (state, action) => upsert(state, action.payload))
       .addCase(batalkanPesanan.fulfilled, (state, action) => upsert(state, action.payload))

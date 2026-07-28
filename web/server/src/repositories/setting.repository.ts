@@ -25,13 +25,17 @@ export const settingRepository = {
   update(payload: Partial<Setting>): Setting {
     const existing = this.get()
     getDb().prepare(
-      "UPDATE setting SET tarif_listrik = ?, markup_default = ?, nama_toko = ?, alamat = ?, telepon = ? WHERE id = 'global'"
+      "UPDATE setting SET tarif_listrik = ?, markup_default = ?, nama_toko = ?, alamat = ?, telepon = ?, logo_base64 = ?, bank_nama = ?, bank_no_rekening = ?, bank_atas_nama = ? WHERE id = 'global'"
     ).run(
       payload.tarifListrik ?? existing.tarifListrik,
       payload.markupDefault ?? existing.markupDefault,
       payload.namaToko ?? existing.namaToko,
       payload.alamat ?? existing.alamat,
       payload.telepon ?? existing.telepon,
+      'logoBase64' in payload ? (payload.logoBase64 ?? null) : (existing.logoBase64 ?? null),
+      'bankNama' in payload ? (payload.bankNama ?? null) : (existing.bankNama ?? null),
+      'bankNoRekening' in payload ? (payload.bankNoRekening ?? null) : (existing.bankNoRekening ?? null),
+      'bankAtasNama' in payload ? (payload.bankAtasNama ?? null) : (existing.bankAtasNama ?? null),
     )
     return this.get()
   }

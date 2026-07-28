@@ -3,10 +3,16 @@ import { join } from 'path'
 import { mkdirSync } from 'fs'
 
 let db: Database.Database | null = null
+let dbFilePath: string | null = null
 
 export function getDb(): Database.Database {
   if (!db) throw new Error('Database belum diinisialisasi.')
   return db
+}
+
+export function getDbPath(): string {
+  if (!dbFilePath) throw new Error('Database belum diinisialisasi.')
+  return dbFilePath
 }
 
 const SCHEMA = `
@@ -123,6 +129,7 @@ export function initDb(): void {
   const dataDir = join(__dirname, '..', 'data')
   mkdirSync(dataDir, { recursive: true })
   const dbPath = join(dataDir, 'printlab-web.db')
+  dbFilePath = dbPath
 
   db = new Database(dbPath)
   db.pragma('journal_mode = WAL')

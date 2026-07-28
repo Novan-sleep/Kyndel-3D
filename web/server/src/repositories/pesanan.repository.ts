@@ -42,6 +42,9 @@ export const pesananRepository = {
     const row = getDb().prepare(`${SELECT_WITH_JOIN} WHERE p.id = ?`).get(id)
     return row ? rowToPesanan(row as any) : null
   },
+  findAktif(): Pesanan[] {
+    return getDb().prepare(`${SELECT_WITH_JOIN} WHERE p.status IN ('Antrian','Printing') ORDER BY p.created_at ASC`).all().map(rowToPesanan)
+  },
   create(payload: any, hpp: number, hargaRekomendasi: number, hargaBeli: number, hargaJual: number, watt: number, tarifListrik: number): Pesanan | null {
     const id = generateId(); const now = nowIso()
     const multiColorJson = payload.multiColorData && payload.multiColorData.length > 0 ? JSON.stringify(payload.multiColorData) : null
@@ -65,6 +68,10 @@ export const pesananRepository = {
         payload.diskonNilai ?? existing.diskonNilai ?? 0,
         id
       )
+    return this.findById(id)
+  },
+  updateMeta(id: string, catatan: string | null, deadline: string | null): Pesanan | null {
+    getDb().prepare('UPDATE pesanan SET catatan = ?, deadline = ? WHERE id = ?').run(catatan, deadline, id)
     return this.findById(id)
   },
   setStatus(id: string, status: PesananStatus, timestamp: string | null): void {

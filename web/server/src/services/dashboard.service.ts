@@ -23,6 +23,8 @@ export const dashboardService = {
       totalPengeluaranBulanIni: pengeluaran,
       profitBulanIni: pendapatan - pengeluaran,
       rataRataNilaiJual: transaksiRepository.rataRataNilaiJual(),
+      rataRataHpp: 0,
+      rataRataEstimasiJam: 0,
       orderMendekatiDeadline: pesananRepository.findMendekatiDeadline(3),
       materialHampirHabis: materialRepository.findHampirHabis(),
       aktivitasTerbaru: aktivitasRepository.findTerbaru(10)

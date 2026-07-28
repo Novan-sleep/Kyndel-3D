@@ -1,115 +1,248 @@
-import { FormEvent, useEffect, useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useAppDispatch, useAppSelector } from '../store/hooks'
-import { fetchPrinters, createPrinter, deletePrinter } from '../store/printersSlice'
-import StatusBadge from '../components/StatusBadge'
-import Modal from '../components/Modal'
-import { PrinterTipe } from '../types'
+import { fetchPrinters, createPrinter, updatePrinter, setPrinterStatus, deletePrinter } from '../store/printersSlice'
+import { Printer } from '../types'
+import StatusBadge from '../components/ui/StatusBadge'
+import ConfirmDialog from '../components/ui/ConfirmDialog'
+import EmptyState from '../components/ui/EmptyState'
 
-const TIPE_OPTIONS: PrinterTipe[] = ['FDM', 'Resin', 'SLA', 'SLS']
-
-export default function Printers() {
+export default function PrinterPage() {
   const dispatch = useAppDispatch()
-  const { items, status, error } = useAppSelector((s) => s.printers)
+  const { items: printers, status } = useAppSelector((s) => s.printers)
   const [showForm, setShowForm] = useState(false)
-  const [form, setForm] = useState({ nama: '', model: '', tipe: 'FDM' as PrinterTipe, watt: 200, catatan: '' })
-  const [formError, setFormError] = useState<string | null>(null)
+  const [editItem, setEditItem] = useState<Printer | null>(null)
+  const [confirm, setConfirm] = useState<Printer | null>(null)
+  const [statusMenu, setStatusMenu] = useState<string | null>(null)
+  const [error, setError] = useState('')
+  const [form, setForm] = useState({ nama: '', model: '', tipe: '', watt: '', catatan: '' })
+
+  useEffect(() => {
+    if (!statusMenu) return
+    const close = () => setStatusMenu(null)
+    window.addEventListener('click', close)
+    return () => window.removeEventListener('click', close)
+  }, [statusMenu])
 
   useEffect(() => { dispatch(fetchPrinters()) }, [dispatch])
 
-  async function handleCreate(e: FormEvent) {
-    e.preventDefault()
-    setFormError(null)
+  const openEdit = (p: Printer) => {
+    setEditItem(p)
+    setForm({ nama: p.nama, model: p.model ?? '', tipe: p.tipe ?? '', watt: String(p.watt), catatan: p.catatan ?? '' })
+    setShowForm(true)
+  }
+
+  const openAdd = () => {
+    setEditItem(null)
+    setForm({ nama: '', model: '', tipe: '', watt: '', catatan: '' })
+    setShowForm(true)
+  }
+
+  const handleSubmit = async () => {
+    setError('')
+    const payload = { nama: form.nama, model: form.model || undefined, tipe: (form.tipe || undefined) as Printer['tipe'], watt: +form.watt, catatan: form.catatan || undefined }
     try {
-      await dispatch(createPrinter(form)).unwrap()
+      if (editItem) await dispatch(updatePrinter({ id: editItem.id, payload })).unwrap()
+      else await dispatch(createPrinter(payload)).unwrap()
       setShowForm(false)
-      setForm({ nama: '', model: '', tipe: 'FDM', watt: 200, catatan: '' })
+      setEditItem(null)
     } catch (err) {
-      setFormError(err instanceof Error ? err.message : 'Gagal menyimpan printer')
+      setError(err instanceof Error ? err.message : 'Gagal menyimpan printer')
     }
   }
 
-  async function handleDelete(id: string) {
-    if (!confirm('Hapus printer ini?')) return
+  const handleSetStatus = async (id: string, status: string) => {
+    setStatusMenu(null)
     try {
-      await dispatch(deletePrinter(id)).unwrap()
+      await dispatch(setPrinterStatus({ id, status })).unwrap()
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Gagal menghapus printer')
+      setError(err instanceof Error ? err.message : 'Gagal mengubah status printer')
     }
   }
+
+  const handleDelete = async () => {
+    if (!confirm) return
+    try {
+      await dispatch(deletePrinter(confirm.id)).unwrap()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Gagal menghapus printer')
+    }
+    setConfirm(null)
+  }
+
+  const statusDot: Record<string, string> = {
+    Idle: 'var(--status-idle)', Printing: 'var(--status-printing)',
+    Maintenance: 'var(--status-maintenance)', Rusak: 'var(--status-rusak)',
+  }
+
+  const statusBorder: Record<string, string> = {
+    Idle: 'var(--success)', Printing: 'var(--accent)',
+    Maintenance: 'var(--warning)', Rusak: 'var(--danger)',
+  }
+
+  const statusNotice: Record<string, { bg: string; color: string; text: string } | null> = {
+    Idle: null, Printing: null,
+    Maintenance: { bg: 'var(--warning-light)', color: 'var(--warning)', text: 'Dalam pemeliharaan — tidak bisa digunakan untuk pesanan' },
+    Rusak:       { bg: 'var(--danger-light)',  color: 'var(--danger)',  text: 'Printer rusak — tidak bisa digunakan untuk pesanan' },
+  }
+
+  if (status === 'loading' && printers.length === 0) return <div className="page-loading"><div className="spinner" /><span>Memuat printer...</span></div>
 
   return (
     <div>
-      <div className="page-header">
-        <div>
-          <h1>Printer</h1>
-          <p>Kelola armada printer workshop</p>
-        </div>
-        <button className="btn btn-primary" onClick={() => setShowForm(true)}>+ Tambah Printer</button>
+      <div className="animate-fade-up" style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 'var(--spacing-lg)' }}>
+        <button className="btn btn-primary" onClick={openAdd}>
+          <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="8" y1="2" x2="8" y2="14"/><line x1="2" y1="8" x2="14" y2="8"/></svg>
+          Tambah Printer
+        </button>
       </div>
 
-      {status === 'loading' && items.length === 0 ? (
-        <div className="page-loading"><span className="spinner" /> Memuat…</div>
-      ) : error ? (
-        <div className="error-text">{error}</div>
-      ) : items.length === 0 ? (
-        <div className="empty-state">Belum ada printer</div>
-      ) : (
-        <div className="card table-wrap">
-          <table>
-            <thead>
-              <tr><th>Nama</th><th>Tipe</th><th>Watt</th><th>Status</th><th>Total Jam</th><th></th></tr>
-            </thead>
-            <tbody>
-              {items.map((p) => (
-                <tr key={p.id}>
-                  <td>{p.nama}{p.model ? <span className="text-muted"> · {p.model}</span> : null}</td>
-                  <td>{p.tipe ?? '-'}</td>
-                  <td>{p.watt} W</td>
-                  <td><StatusBadge status={p.status} /></td>
-                  <td>{p.totalJam.toFixed(1)} jam</td>
-                  <td>
-                    <button className="btn btn-danger btn-sm" disabled={p.status === 'Printing'} onClick={() => handleDelete(p.id)}>Hapus</button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      {error && <div className="alert alert-danger" style={{ marginBottom: 'var(--spacing-md)' }}>{error}</div>}
+
+      {printers.length === 0 ? <EmptyState message="Belum ada printer" icon="printer" /> : (
+        <div className="animate-fade-up-1" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 'var(--spacing-md)' }}>
+          {printers.map(p => (
+            <div key={p.id} className="card card-hover" style={{ padding: 'var(--spacing-lg)', display: 'flex', flexDirection: 'column', borderLeft: `3px solid ${statusBorder[p.status] ?? 'var(--border)'}` }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
+                <div>
+                  <div style={{ fontWeight: 700, marginBottom: '3px', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px' }}>
+                    <span style={{
+                      width: 8, height: 8, borderRadius: '50%',
+                      background: statusDot[p.status] ?? 'var(--text-muted)',
+                      display: 'inline-block', flexShrink: 0,
+                      ...(p.status === 'Printing' ? { animation: 'pulse 2s ease-in-out infinite' } : {})
+                    }} />
+                    {p.nama}
+                  </div>
+                  {(p.tipe || p.model) && (
+                    <div style={{ fontSize: '11px', color: 'var(--text-muted)', paddingLeft: '16px' }}>
+                      {p.tipe}{p.model ? ` · ${p.model}` : ''}
+                    </div>
+                  )}
+                </div>
+                <StatusBadge status={p.status} />
+              </div>
+
+              <div style={{ fontSize: '12px', color: 'var(--text-secondary)', display: 'flex', flexDirection: 'column', gap: '6px', flex: 1 }}>
+                {[
+                  ['Konsumsi', `${p.watt} W`],
+                  ['Total Jam', `${p.totalJam.toFixed(1)} jam`],
+                ].map(([label, val]) => (
+                  <div key={label} style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 0', borderBottom: '1px solid var(--border-subtle)' }}>
+                    <span style={{ color: 'var(--text-muted)' }}>{label}</span>
+                    <span style={{ fontWeight: 500 }}>{val}</span>
+                  </div>
+                ))}
+                {p.catatan && (
+                  <div style={{ color: 'var(--text-muted)', marginTop: '4px', fontSize: '11px', fontStyle: 'italic' }}>{p.catatan}</div>
+                )}
+                {statusNotice[p.status] && (
+                  <div style={{
+                    marginTop: '8px', padding: '6px 10px', borderRadius: 'var(--radius-sm)',
+                    background: statusNotice[p.status]!.bg, color: statusNotice[p.status]!.color,
+                    fontSize: '11px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px',
+                  }}>
+                    <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M8 2L1.5 13h13L8 2z"/><line x1="8" y1="7" x2="8" y2="10"/><circle cx="8" cy="12.5" r="0.5" fill="currentColor"/>
+                    </svg>
+                    {statusNotice[p.status]!.text}
+                  </div>
+                )}
+              </div>
+
+              <div style={{ display: 'flex', gap: '8px', marginTop: '14px' }}>
+                <button className="btn btn-secondary btn-sm" style={{ flex: 1 }} onClick={() => openEdit(p)}>Edit</button>
+                {p.status !== 'Printing' && (
+                  <div style={{ position: 'relative' }} onClick={e => e.stopPropagation()}>
+                    <button
+                      className="btn btn-secondary btn-sm"
+                      onClick={() => setStatusMenu(statusMenu === p.id ? null : p.id)}
+                      style={{ whiteSpace: 'nowrap' }}
+                    >
+                      Status ▾
+                    </button>
+                    {statusMenu === p.id && (
+                      <div style={{
+                        position: 'absolute', bottom: 'calc(100% + 6px)', right: 0,
+                        background: 'var(--bg-surface)', border: '1px solid var(--border)',
+                        borderRadius: 'var(--radius-md)', boxShadow: '0 4px 16px rgba(0,0,0,0.3)',
+                        minWidth: '130px', zIndex: 50, overflow: 'hidden',
+                      }}>
+                        {(['Idle', 'Maintenance', 'Rusak'] as const)
+                          .filter(s => s !== p.status)
+                          .map(s => (
+                            <button
+                              key={s}
+                              onClick={() => handleSetStatus(p.id, s)}
+                              style={{
+                                display: 'block', width: '100%', padding: '8px 14px',
+                                textAlign: 'left', background: 'none', border: 'none',
+                                cursor: 'pointer', fontSize: '12px', fontWeight: 500,
+                                color: s === 'Rusak' ? 'var(--danger)' : s === 'Maintenance' ? 'var(--warning)' : 'var(--success)',
+                              }}
+                              onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-surface-2)')}
+                              onMouseLeave={e => (e.currentTarget.style.background = 'none')}
+                            >
+                              → {s}
+                            </button>
+                          ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+                {p.status !== 'Printing' && (
+                  <button className="btn btn-sm" style={{ background: 'var(--danger-light)', color: 'var(--danger)' }} onClick={() => setConfirm(p)}>Hapus</button>
+                )}
+              </div>
+            </div>
+          ))}
         </div>
       )}
 
       {showForm && (
-        <Modal title="Tambah Printer" onClose={() => setShowForm(false)}>
-          <form onSubmit={handleCreate}>
-            <div className="field">
-              <label>Nama</label>
-              <input value={form.nama} onChange={(e) => setForm({ ...form, nama: e.target.value })} required autoFocus />
+        <div className="modal-overlay">
+          <div className="modal-box" style={{ width: '440px' }}>
+            <div className="modal-header">
+              <h3>{editItem ? 'Edit Printer' : 'Tambah Printer'}</h3>
+              <button className="modal-close" onClick={() => { setShowForm(false); setError('') }}>✕</button>
             </div>
-            <div className="field">
-              <label>Model</label>
-              <input value={form.model} onChange={(e) => setForm({ ...form, model: e.target.value })} />
+            <div className="modal-body">
+              {error && <div className="alert alert-danger" style={{ marginBottom: 12 }}>{error}</div>}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: 'var(--spacing-lg)' }}>
+                {[
+                  { label: 'Nama', key: 'nama', required: true },
+                  { label: 'Model', key: 'model' },
+                ].map(({ label, key, required }) => (
+                  <div key={key}>
+                    <label className="form-label">{label}{required && <span style={{ color: 'var(--danger)', marginLeft: 2 }}>*</span>}</label>
+                    <input value={(form as any)[key]} onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))} />
+                  </div>
+                ))}
+                <div>
+                  <label className="form-label">Tipe</label>
+                  <select value={form.tipe} onChange={e => setForm(f => ({ ...f, tipe: e.target.value }))}>
+                    <option value="">Pilih...</option>
+                    {['FDM', 'Resin', 'SLA', 'SLS'].map(t => <option key={t} value={t}>{t}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="form-label">Watt <span style={{ color: 'var(--danger)' }}>*</span></label>
+                  <input type="number" value={form.watt} onChange={e => setForm(f => ({ ...f, watt: e.target.value }))} />
+                </div>
+                <div>
+                  <label className="form-label">Catatan</label>
+                  <textarea value={form.catatan} onChange={e => setForm(f => ({ ...f, catatan: e.target.value }))} rows={2} />
+                </div>
+              </div>
+              <div className="modal-footer">
+                <button className="btn btn-secondary btn-sm" onClick={() => { setShowForm(false); setError('') }}>Batal</button>
+                <button className="btn btn-primary btn-sm" onClick={handleSubmit}>Simpan</button>
+              </div>
             </div>
-            <div className="field">
-              <label>Tipe</label>
-              <select value={form.tipe} onChange={(e) => setForm({ ...form, tipe: e.target.value as PrinterTipe })}>
-                {TIPE_OPTIONS.map((t) => <option key={t} value={t}>{t}</option>)}
-              </select>
-            </div>
-            <div className="field">
-              <label>Watt</label>
-              <input type="number" min={0} value={form.watt} onChange={(e) => setForm({ ...form, watt: Number(e.target.value) })} required />
-            </div>
-            <div className="field">
-              <label>Catatan</label>
-              <input value={form.catatan} onChange={(e) => setForm({ ...form, catatan: e.target.value })} />
-            </div>
-            {formError && <div className="error-text">{formError}</div>}
-            <div className="modal-actions">
-              <button type="button" className="btn btn-ghost" onClick={() => setShowForm(false)}>Batal</button>
-              <button type="submit" className="btn btn-primary">Simpan</button>
-            </div>
-          </form>
-        </Modal>
+          </div>
+        </div>
       )}
+
+      {confirm && <ConfirmDialog title="Hapus Printer" message={`Hapus printer "${confirm.nama}"?`} onConfirm={handleDelete} onCancel={() => setConfirm(null)} confirmLabel="Hapus" danger />}
     </div>
   )
 }

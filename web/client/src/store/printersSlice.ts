@@ -8,6 +8,8 @@ export const createPrinter = createAsyncThunk('printers/create', async (payload:
 
 export const updatePrinter = createAsyncThunk('printers/update', async ({ id, payload }: { id: string; payload: Partial<Printer> }) => api.put<Printer>(`/printer/${id}`, payload))
 
+export const setPrinterStatus = createAsyncThunk('printers/setStatus', async ({ id, status }: { id: string; status: string }) => api.post<Printer>(`/printer/${id}/status`, { status }))
+
 export const deletePrinter = createAsyncThunk('printers/delete', async (id: string) => { await api.delete(`/printer/${id}`); return id })
 
 interface PrintersState {
@@ -29,6 +31,10 @@ const printersSlice = createSlice({
       .addCase(fetchPrinters.rejected, (state, action) => { state.status = 'error'; state.error = action.error.message ?? 'Gagal memuat printer' })
       .addCase(createPrinter.fulfilled, (state, action) => { state.items.push(action.payload) })
       .addCase(updatePrinter.fulfilled, (state, action) => {
+        const idx = state.items.findIndex((p) => p.id === action.payload.id)
+        if (idx >= 0) state.items[idx] = action.payload
+      })
+      .addCase(setPrinterStatus.fulfilled, (state, action) => {
         const idx = state.items.findIndex((p) => p.id === action.payload.id)
         if (idx >= 0) state.items[idx] = action.payload
       })

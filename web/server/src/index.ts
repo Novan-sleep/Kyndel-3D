@@ -9,6 +9,14 @@ import { printerRouter } from './routes/printer.routes'
 import { materialRouter } from './routes/material.routes'
 import { pesananRouter } from './routes/pesanan.routes'
 import { dashboardRouter } from './routes/dashboard.routes'
+import { klienRouter } from './routes/klien.routes'
+import { transaksiRouter } from './routes/transaksi.routes'
+import { settingRouter } from './routes/setting.routes'
+import { aktivitasRouter } from './routes/aktivitas.routes'
+import { pricingRouter } from './routes/pricing.routes'
+import { notaRouter } from './routes/nota.routes'
+import { laporanRouter } from './routes/laporan.routes'
+import { appRouter } from './routes/app.routes'
 
 initDb()
 
@@ -23,6 +31,14 @@ app.use('/api/printer', requireAuth, printerRouter)
 app.use('/api/material', requireAuth, materialRouter)
 app.use('/api/pesanan', requireAuth, pesananRouter)
 app.use('/api/dashboard', requireAuth, dashboardRouter)
+app.use('/api/klien', requireAuth, klienRouter)
+app.use('/api/transaksi', requireAuth, transaksiRouter)
+app.use('/api/setting', requireAuth, settingRouter)
+app.use('/api/aktivitas', requireAuth, aktivitasRouter)
+app.use('/api/pricing', requireAuth, pricingRouter)
+app.use('/api/nota', requireAuth, notaRouter)
+app.use('/api/laporan', requireAuth, laporanRouter)
+app.use('/api/app', requireAuth, appRouter)
 
 app.use(errorMiddleware)
 

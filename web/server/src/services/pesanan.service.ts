@@ -4,7 +4,7 @@ import { materialRepository } from '../repositories/material.repository'
 import { transaksiRepository } from '../repositories/transaksi.repository'
 import { aktivitasRepository } from '../repositories/aktivitas.repository'
 import { settingRepository } from '../repositories/setting.repository'
-import { hitungHpp, hitungHargaRekomendasi } from './pricing.service'
+import { hitungHpp, hitungHargaRekomendasi, hitungHppMultiColor, hitungHargaRekomendasiMultiColor } from './pricing.service'
 import { nowIso, HttpError } from '../utils'
 import { getDb } from '../db'
 
@@ -23,13 +23,30 @@ export const pesananService = {
     const printer = printerRepository.findById(payload.printerId)
     if (!printer) throw new HttpError(400, 'Printer tidak ditemukan')
     if (printer.status !== 'Idle') throw new HttpError(400, `Printer "${printer.nama}" sedang tidak Idle`)
-    const material = materialRepository.findById(payload.materialId)
-    if (!material) throw new HttpError(400, 'Material tidak ditemukan')
-    if (material.stok < payload.beratMaterial) throw new HttpError(400, `Stok material tidak cukup. Tersedia: ${material.stok} kg`)
     const setting = settingRepository.get()
-    const hpp = hitungHpp(payload.beratMaterial, material.hargaBeliPerGram, printer.watt, payload.estimasiJam, setting.tarifListrik)
-    const hargaRekomendasi = hitungHargaRekomendasi(payload.beratMaterial, material.hargaJualPerGram, printer.watt, payload.estimasiJam, setting.tarifListrik, payload.markup)
-    const pesanan = pesananRepository.create(payload, hpp, hargaRekomendasi, material.hargaBeliPerGram, material.hargaJualPerGram, printer.watt, setting.tarifListrik)
+    let hpp: number, hargaRekomendasi: number, hargaBeli: number, hargaJual: number
+    if (payload.multiColorData && payload.multiColorData.length > 0) {
+      const resolved = payload.multiColorData.map((entry: any) => {
+        const mat = materialRepository.findById(entry.materialId)
+        if (!mat) throw new HttpError(400, 'Material tidak ditemukan')
+        if (mat.stok < entry.beratGram / 1000) throw new HttpError(400, `Stok "${mat.nama}" tidak cukup. Tersedia: ${mat.stok} kg, dibutuhkan: ${(entry.beratGram / 1000).toFixed(3)} kg`)
+        return { beratGram: entry.beratGram, hargaBeliPerGram: mat.hargaBeliPerGram, hargaJualPerGram: mat.hargaJualPerGram }
+      })
+      hpp = hitungHppMultiColor(resolved, printer.watt, payload.estimasiJam, setting.tarifListrik)
+      hargaRekomendasi = hitungHargaRekomendasiMultiColor(resolved, printer.watt, payload.estimasiJam, setting.tarifListrik, payload.markup)
+      const primaryMat = materialRepository.findById(payload.multiColorData[0].materialId)!
+      hargaBeli = primaryMat.hargaBeliPerGram
+      hargaJual = primaryMat.hargaJualPerGram
+    } else {
+      const material = materialRepository.findById(payload.materialId)
+      if (!material) throw new HttpError(400, 'Material tidak ditemukan')
+      if (material.stok < payload.beratMaterial) throw new HttpError(400, `Stok material tidak cukup. Tersedia: ${material.stok} kg`)
+      hpp = hitungHpp(payload.beratMaterial, material.hargaBeliPerGram, printer.watt, payload.estimasiJam, setting.tarifListrik)
+      hargaRekomendasi = hitungHargaRekomendasi(payload.beratMaterial, material.hargaJualPerGram, printer.watt, payload.estimasiJam, setting.tarifListrik, payload.markup)
+      hargaBeli = material.hargaBeliPerGram
+      hargaJual = material.hargaJualPerGram
+    }
+    const pesanan = pesananRepository.create(payload, hpp, hargaRekomendasi, hargaBeli, hargaJual, printer.watt, setting.tarifListrik)
     aktivitasRepository.catat('Pesanan', 'BUAT', `Pesanan baru "${pesanan!.nama}" untuk klien ${pesanan!.klien} dibuat`, pesanan!.id)
     return pesanan
   },
@@ -39,6 +56,15 @@ export const pesananService = {
     if (existing.status !== 'Antrian') throw new HttpError(400, 'Hanya pesanan Antrian yang dapat diubah')
     const updated = pesananRepository.update(id, payload)
     aktivitasRepository.catat('Pesanan', 'UPDATE', `Pesanan "${updated!.nama}" diperbarui`, id)
+    return updated
+  },
+  updateMeta(id: string, payload: { catatan?: string; deadline?: string }) {
+    const existing = pesananRepository.findById(id)
+    if (!existing) throw new HttpError(404, 'Pesanan tidak ditemukan')
+    const catatan = 'catatan' in payload ? (payload.catatan || null) : (existing.catatan ?? null)
+    const deadline = 'deadline' in payload ? (payload.deadline || null) : (existing.deadline ?? null)
+    const updated = pesananRepository.updateMeta(id, catatan, deadline)
+    aktivitasRepository.catat('Pesanan', 'UPDATE', `Catatan/deadline pesanan "${updated!.nama}" diperbarui`, id)
     return updated
   },
   mulaiPrinting(id: string) {
@@ -64,7 +90,13 @@ export const pesananService = {
       const now = nowIso()
       const today = now.split('T')[0]
       pesananRepository.setStatus(id, 'Selesai', now)
-      materialRepository.kurangiStok(pesanan.materialId, pesanan.beratMaterial)
+      if (pesanan.multiColorData && pesanan.multiColorData.length > 0) {
+        for (const entry of pesanan.multiColorData) {
+          materialRepository.kurangiStok(entry.materialId, entry.beratGram / 1000)
+        }
+      } else {
+        materialRepository.kurangiStok(pesanan.materialId, pesanan.beratMaterial)
+      }
       printerRepository.setStatus(pesanan.printerId, 'Idle', null)
       printerRepository.addTotalJam(pesanan.printerId, pesanan.estimasiJam)
       transaksiRepository.createAutoFromPesanan(id, `Pesanan: ${pesanan.nama} (${pesanan.klien})`, pesanan.hargaFinal, pesanan.hpp, today)
