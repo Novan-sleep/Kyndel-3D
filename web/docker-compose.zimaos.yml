@@ -1,0 +1,41 @@
+# Import-ready compose for ZimaOS App Store ("Install Custom App" → paste
+# this file). Unlike docker-compose.yml (which builds from ./server and
+# ./client source), every service here uses a pre-built `image:` so ZimaOS
+# doesn't need the repo checked out on the box at all — see DOCKER-ZIMAOS.md.
+#
+# Images are built and published to GHCR by .github/workflows/docker-publish.yml
+# on every push to main. Update the ghcr.io/... paths below if you fork this
+# repo under a different GitHub username/org.
+services:
+  server:
+    image: ghcr.io/novan-sleep/kyndel3d-web-server:latest
+    restart: unless-stopped
+    environment:
+      - PORT=4000
+      - AUTH_USERNAME=${AUTH_USERNAME}
+      - AUTH_PASSWORD_HASH=${AUTH_PASSWORD_HASH}
+      - JWT_SECRET=${JWT_SECRET}
+    volumes:
+      - server-data:/app/data
+    # No ports published to the host — only client (nginx) and cloudflared
+    # need to reach it, both over the internal compose network.
+
+  client:
+    image: ghcr.io/novan-sleep/kyndel3d-web-client:latest
+    restart: unless-stopped
+    depends_on:
+      - server
+    ports:
+      - "8080:80"
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    command: tunnel run
+    environment:
+      - TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN}
+    depends_on:
+      - client
+
+volumes:
+  server-data:
