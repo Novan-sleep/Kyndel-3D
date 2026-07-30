@@ -4,6 +4,10 @@ import printersReducer from './printersSlice'
 import materialsReducer from './materialsSlice'
 import pesananReducer from './pesananSlice'
 import dashboardReducer from './dashboardSlice'
+import klienReducer from './klienSlice'
+import transaksiReducer from './transaksiSlice'
+import aktivitasReducer from './aktivitasSlice'
+import settingReducer from './settingSlice'
 
 export const store = configureStore({
   reducer: {
@@ -12,6 +16,10 @@ export const store = configureStore({
     materials: materialsReducer,
     pesanan: pesananReducer,
     dashboard: dashboardReducer,
+    klien: klienReducer,
+    transaksi: transaksiReducer,
+    aktivitas: aktivitasReducer,
+    setting: settingReducer,
   },
 })
 

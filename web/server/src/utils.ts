@@ -17,3 +17,9 @@ export class HttpError extends Error {
     this.status = status
   }
 }
+
+export function toCsv(rows: string[][]): string {
+  return rows.map(row =>
+    row.map(cell => `"${String(cell ?? '').replace(/"/g, '""')}"`).join(',')
+  ).join('\r\n')
+}

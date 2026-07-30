@@ -41,3 +41,35 @@ export const api = {
   put: <T>(path: string, body?: unknown) => request<T>(path, { method: 'PUT', body: body ? JSON.stringify(body) : undefined }),
   delete: <T>(path: string) => request<T>(path, { method: 'DELETE' }),
 }
+
+/** Downloads a non-JSON response (CSV export, DB backup) — needs a real fetch since auth is a
+ * Bearer header, not a cookie, so a plain `<a href>` can't carry the token. */
+export async function downloadBlob(path: string, filename: string): Promise<void> {
+  const token = getToken()
+  const headers: Record<string, string> = {}
+  if (token) headers.Authorization = `Bearer ${token}`
+  const res = await fetch(`${BASE_URL}${path}`, { headers })
+  if (!res.ok) throw new Error('Gagal mengunduh file')
+  const blob = await res.blob()
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  URL.revokeObjectURL(url)
+}
+
+export function formatRp(n: number): string {
+  return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(n)
+}
+
+export function formatTgl(iso?: string): string {
+  if (!iso) return '-'
+  return new Intl.DateTimeFormat('id-ID', { day: '2-digit', month: 'long', year: 'numeric' }).format(new Date(iso))
+}
+
+export function formatJam(jam: number): string {
+  return `${jam} jam`
+}

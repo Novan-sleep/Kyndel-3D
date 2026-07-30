@@ -114,6 +114,19 @@ export interface Setting {
   bankAtasNama?: string
 }
 
+// ─── Klien ─────────────────────────────────────────────
+export interface Klien {
+  id: string
+  nama: string
+  telepon?: string
+  email?: string
+  alamat?: string
+  catatan?: string
+  createdAt: string
+  totalPesanan: number
+  totalNilai: number
+}
+
 // ─── Dashboard KPI ─────────────────────────────────────────
 export interface DashboardKPI {
   totalOrderAktif: number
@@ -128,6 +141,8 @@ export interface DashboardKPI {
   totalPengeluaranBulanIni: number
   profitBulanIni: number
   rataRataNilaiJual: number
+  rataRataHpp: number
+  rataRataEstimasiJam: number
   orderMendekatiDeadline: Pesanan[]
   materialHampirHabis: Material[]
   aktivitasTerbaru: Aktivitas[]

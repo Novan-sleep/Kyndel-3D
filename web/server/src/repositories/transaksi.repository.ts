@@ -9,6 +9,7 @@ function rowToTransaksi(row: any): Transaksi {
 export const transaksiRepository = {
   findAll(): Transaksi[] { return getDb().prepare('SELECT * FROM transaksi ORDER BY tanggal DESC, created_at DESC').all().map(rowToTransaksi) },
   findById(id: string): Transaksi | null { const row = getDb().prepare('SELECT * FROM transaksi WHERE id = ?').get(id); return row ? rowToTransaksi(row) : null },
+  findByBulan(bulan: string): Transaksi[] { return getDb().prepare('SELECT * FROM transaksi WHERE tanggal LIKE ? ORDER BY tanggal DESC').all(`${bulan}%`).map(rowToTransaksi) },
   createManual(payload: any): Transaksi | null {
     const id = generateId(); const now = nowIso()
     getDb().prepare("INSERT INTO transaksi (id, jenis, nama, kategori, jumlah, tanggal, pesanan_id, source_type, source_id, is_auto_generated, created_at) VALUES (?, ?, ?, ?, ?, ?, NULL, 'manual', NULL, 0, ?)")
@@ -19,6 +20,12 @@ export const transaksiRepository = {
     const id = generateId(); const now = nowIso()
     getDb().prepare("INSERT INTO transaksi (id, jenis, nama, kategori, jumlah, hpp_snapshot, tanggal, pesanan_id, source_type, source_id, is_auto_generated, created_at) VALUES (?, 'pendapatan', ?, 'Pesanan', ?, ?, ?, ?, 'pesanan', ?, 1, ?)")
       .run(id, nama, jumlah, hpp, tanggal, pesananId, pesananId, now)
+    return this.findById(id)
+  },
+  createAutoFromRestock(materialId: string, nama: string, jumlah: number, tanggal: string): Transaksi | null {
+    const id = generateId(); const now = nowIso()
+    getDb().prepare("INSERT INTO transaksi (id, jenis, nama, kategori, jumlah, tanggal, pesanan_id, source_type, source_id, is_auto_generated, created_at) VALUES (?, 'pengeluaran', ?, 'Pembelian Material', ?, ?, NULL, 'manual', ?, 1, ?)")
+      .run(id, nama, jumlah, tanggal, materialId, now)
     return this.findById(id)
   },
   delete(id: string): boolean {
