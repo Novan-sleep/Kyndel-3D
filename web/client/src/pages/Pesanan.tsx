@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useMemo, Fragment } from 'react'
+import { LazyMotion, domAnimation, m } from 'motion/react'
 import { useAppDispatch, useAppSelector } from '../store/hooks'
 import { fetchPesanan, createPesanan, updatePesanan, updateMetaPesanan, mulaiPrinting, selesaikanPesanan, batalkanPesanan, hapusPesanan } from '../store/pesananSlice'
 import { fetchPrinters } from '../store/printersSlice'
@@ -9,14 +10,10 @@ import { Pesanan, ColorEntry } from '../types'
 import StatusBadge from '../components/ui/StatusBadge'
 import ConfirmDialog from '../components/ui/ConfirmDialog'
 import EmptyState from '../components/ui/EmptyState'
-
-function FormLabel({ children, required }: { children: React.ReactNode; required?: boolean }) {
-  return (
-    <label className="form-label">
-      {children}{required && <span style={{ color: 'var(--danger)', marginLeft: 2 }}>*</span>}
-    </label>
-  )
-}
+import DataRow from '../components/ui/DataRow'
+import FormField from '../components/ui/FormField'
+import Modal from '../components/ui/Modal'
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '../components/ui/Table'
 
 function MatInfo({ mat }: { mat: { hargaJualPerGram: number; hargaBeliPerGram: number; marginPerGram: number } | undefined }) {
   if (!mat) return null
@@ -31,62 +28,50 @@ function MatInfo({ mat }: { mat: { hargaJualPerGram: number; hargaBeliPerGram: n
 }
 
 function DetailModal({ pesanan, onClose }: { pesanan: Pesanan; onClose: () => void }) {
-  const row = (label: string, value: React.ReactNode) => (
-    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--border-subtle)', fontSize: '13px' }}>
-      <span style={{ color: 'var(--text-muted)' }}>{label}</span>
-      <span style={{ fontWeight: 500, textAlign: 'right', maxWidth: '60%' }}>{value ?? '—'}</span>
-    </div>
-  )
   const SectionHead = ({ children }: { children: string }) => (
     <div className="section-label" style={{ marginTop: 16 }}>{children}</div>
   )
   return (
-    <div className="modal-overlay">
-      <div className="modal-box" style={{ width: '520px', maxHeight: '88vh', overflowY: 'auto' }}>
-        <div className="modal-header">
-          <div>
-            <div style={{ fontWeight: 700, fontSize: '15px', marginBottom: '3px', fontFamily: "'Sora', sans-serif" }}>{pesanan.nama}</div>
-            <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{pesanan.klien}</div>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <StatusBadge status={pesanan.status} />
-            <button className="modal-close" onClick={onClose}>✕</button>
-          </div>
+    <Modal width={520}>
+      <div className="modal-header">
+        <div>
+          <div style={{ fontWeight: 700, fontSize: '15px', marginBottom: '3px', fontFamily: "'Manrope', sans-serif" }}>{pesanan.nama}</div>
+          <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{pesanan.klien}</div>
         </div>
-        <div className="modal-body">
-          <SectionHead>Detail Order</SectionHead>
-          {pesanan.tipe && row('Tipe', pesanan.tipe)}
-          {row('Printer', pesanan.printerNama)}
-          {pesanan.multiColorData && pesanan.multiColorData.length > 0 ? (
-            <div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--border-subtle)', fontSize: '13px' }}>
-                <span style={{ color: 'var(--text-muted)' }}>Mode</span>
-                <span style={{ fontWeight: 600, color: 'var(--accent)' }}>Multi Color ({pesanan.multiColorData.length} warna)</span>
-              </div>
-              {pesanan.multiColorData.map((entry, i) => (
-                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0 6px 12px', borderBottom: '1px solid var(--border-subtle)', fontSize: '13px' }}>
-                  <span style={{ color: 'var(--text-muted)' }}>Warna {i + 1} — {entry.materialNama}</span>
-                  <span style={{ fontWeight: 500 }}>{entry.beratGram} g</span>
-                </div>
-              ))}
-              {row('Total Berat', `${(pesanan.beratMaterial * 1000).toFixed(0)} g`)}
-            </div>
-          ) : (
-            <>
-              {row('Material', pesanan.materialNama)}
-              {row('Berat', `${(pesanan.beratMaterial * 1000).toFixed(0)} g`)}
-            </>
-          )}
-          {row('Estimasi Waktu', `${pesanan.estimasiJam} jam`)}
-          {row('Markup', `${pesanan.markup}%`)}
-          {pesanan.deadline && row('Deadline', formatTgl(pesanan.deadline))}
-          {pesanan.catatan && row('Catatan', pesanan.catatan)}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <StatusBadge status={pesanan.status} />
+          <button className="modal-close" onClick={onClose}>✕</button>
+        </div>
+      </div>
+      <div className="modal-body" style={{ maxHeight: '72vh', overflowY: 'auto' }}>
+        <SectionHead>Detail Order</SectionHead>
+        {pesanan.tipe && <DataRow label="Tipe" value={pesanan.tipe} />}
+        <DataRow label="Printer" value={pesanan.printerNama} />
+        {pesanan.multiColorData && pesanan.multiColorData.length > 0 ? (
+          <div>
+            <DataRow label="Mode" value={<span style={{ fontWeight: 600, color: 'var(--accent)' }}>Multi Color ({pesanan.multiColorData.length} warna)</span>} />
+            {pesanan.multiColorData.map((entry, i) => (
+              <DataRow key={i} indent label={`Warna ${i + 1} — ${entry.materialNama}`} value={`${entry.beratGram} g`} />
+            ))}
+            <DataRow label="Total Berat" value={`${(pesanan.beratMaterial * 1000).toFixed(0)} g`} />
+          </div>
+        ) : (
+          <>
+            <DataRow label="Material" value={pesanan.materialNama} />
+            <DataRow label="Berat" value={`${(pesanan.beratMaterial * 1000).toFixed(0)} g`} />
+          </>
+        )}
+        <DataRow label="Estimasi Waktu" value={`${pesanan.estimasiJam} jam`} />
+        <DataRow label="Markup" value={`${pesanan.markup}%`} />
+        {pesanan.deadline && <DataRow label="Deadline" value={formatTgl(pesanan.deadline)} />}
+        {pesanan.catatan && <DataRow label="Catatan" value={pesanan.catatan} />}
 
-          <SectionHead>Harga</SectionHead>
-          {row('HPP', formatRp(pesanan.hpp))}
-          {row('Harga Rekomendasi', <span style={{ color: 'var(--accent)', fontWeight: 700 }}>{formatRp(pesanan.hargaRekomendasi)}</span>)}
-          {row('Nilai Jual', <span style={{ fontWeight: 700 }}>{formatRp(pesanan.nilaiJual)}</span>)}
-          {pesanan.diskonTipe && row('Diskon', (
+        <SectionHead>Harga</SectionHead>
+        <DataRow label="HPP" value={formatRp(pesanan.hpp)} />
+        <DataRow label="Harga Rekomendasi" value={<span style={{ color: 'var(--accent)', fontWeight: 700 }}>{formatRp(pesanan.hargaRekomendasi)}</span>} />
+        <DataRow label="Nilai Jual" value={<span style={{ fontWeight: 700 }}>{formatRp(pesanan.nilaiJual)}</span>} />
+        {pesanan.diskonTipe && (
+          <DataRow label="Diskon" value={(
             <span style={{ color: 'var(--danger)', fontWeight: 700 }}>
               −{formatRp(pesanan.nilaiJual - pesanan.hargaFinal)}
               {' '}
@@ -94,21 +79,21 @@ function DetailModal({ pesanan, onClose }: { pesanan: Pesanan; onClose: () => vo
                 ({pesanan.diskonTipe === 'persen' ? `${pesanan.diskonNilai}%` : 'nominal'})
               </span>
             </span>
-          ))}
-          {pesanan.diskonTipe && row('Harga Final', <span style={{ fontWeight: 700, color: 'var(--success)' }}>{formatRp(pesanan.hargaFinal)}</span>)}
-          {row('Estimasi Profit', (() => {
-            const p = pesanan.hargaFinal - pesanan.hpp
-            return <span style={{ color: p >= 0 ? 'var(--success)' : 'var(--danger)', fontWeight: 700 }}>{formatRp(p)}</span>
-          })())}
+          )} />
+        )}
+        {pesanan.diskonTipe && <DataRow label="Harga Final" value={<span style={{ fontWeight: 700, color: 'var(--success)' }}>{formatRp(pesanan.hargaFinal)}</span>} />}
+        <DataRow label="Estimasi Profit" value={(() => {
+          const p = pesanan.hargaFinal - pesanan.hpp
+          return <span style={{ color: p >= 0 ? 'var(--success)' : 'var(--danger)', fontWeight: 700 }}>{formatRp(p)}</span>
+        })()} />
 
-          <SectionHead>Waktu</SectionHead>
-          {row('Dibuat', formatTgl(pesanan.createdAt))}
-          {pesanan.printingAt && row('Mulai Print', formatTgl(pesanan.printingAt))}
-          {pesanan.completedAt && row('Selesai', formatTgl(pesanan.completedAt))}
-          {pesanan.cancelledAt && row('Dibatalkan', formatTgl(pesanan.cancelledAt))}
-        </div>
+        <SectionHead>Waktu</SectionHead>
+        <DataRow label="Dibuat" value={formatTgl(pesanan.createdAt)} />
+        {pesanan.printingAt && <DataRow label="Mulai Print" value={formatTgl(pesanan.printingAt)} />}
+        {pesanan.completedAt && <DataRow label="Selesai" value={formatTgl(pesanan.completedAt)} />}
+        {pesanan.cancelledAt && <DataRow label="Dibatalkan" value={formatTgl(pesanan.cancelledAt)} last />}
       </div>
-    </div>
+    </Modal>
   )
 }
 
@@ -428,95 +413,111 @@ export default function PesananPage() {
       {error && <div className="alert alert-danger">{error}</div>}
 
       {sorted.length === 0 ? <EmptyState message="Belum ada pesanan" icon="order" /> : (
-        <div className="animate-fade-up-1" style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-          {sorted.map(p => {
-            const isSelectable = invoiceMode && p.status === 'Selesai'
-            const isChecked = invoiceSelected.has(p.id)
-            const isDimmed = invoiceMode && p.status !== 'Selesai'
-            return (
-              <div
-                key={p.id}
-                className={invoiceMode ? '' : 'row-hover'}
-                onClick={() => {
-                  if (invoiceMode) { if (isSelectable) toggleInvoiceItem(p.id) }
-                  else setSelected(p)
-                }}
-                style={{
-                  background: isChecked ? 'var(--accent-light)' : 'var(--bg-surface)',
-                  border: isChecked ? '1.5px solid var(--accent)' : '1px solid var(--border)',
-                  borderRadius: 'var(--radius-lg)',
-                  padding: '13px var(--spacing-lg)', cursor: invoiceMode ? (isSelectable ? 'pointer' : 'default') : 'pointer',
-                  display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                  opacity: isDimmed ? 0.4 : 1,
-                  transition: 'border-color 0.15s, background 0.15s, opacity 0.15s',
-                }}
-              >
-                {invoiceMode && (
-                  <div style={{ marginRight: '12px', flexShrink: 0, pointerEvents: 'none' }}>
-                    <input
-                      type="checkbox"
-                      checked={isChecked}
-                      readOnly
-                      style={{ width: '16px', height: '16px', cursor: 'inherit', accentColor: 'var(--accent)' }}
-                    />
-                  </div>
-                )}
-                <div style={{ flex: 1, minWidth: 0, marginRight: '12px' }}>
-                  <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', marginBottom: '4px' }}>
-                    <span className="truncate" style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)' }}>{p.nama}</span>
-                    <span style={{ color: 'var(--text-muted)', fontSize: '12px', fontWeight: 400, flexShrink: 0 }}>{p.klien}</span>
-                    {p.deadline && (
-                      <span style={{ fontSize: '11px', color: 'var(--warning)', fontWeight: 600, flexShrink: 0, marginLeft: 'auto' }}>
-                        ⏰ {formatTgl(p.deadline)}
-                      </span>
+        <LazyMotion features={domAnimation} strict>
+        <div className="card" style={{ overflow: 'hidden' }}>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                {invoiceMode && <TableHead style={{ width: 32 }} />}
+                <TableHead>Pesanan</TableHead>
+                <TableHead>Printer</TableHead>
+                <TableHead>Material</TableHead>
+                <TableHead align="right">Berat</TableHead>
+                <TableHead align="right">Harga</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead align="right">Aksi</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {sorted.map((p, i) => {
+                const isSelectable = invoiceMode && p.status === 'Selesai'
+                const isChecked = invoiceSelected.has(p.id)
+                const isDimmed = invoiceMode && p.status !== 'Selesai'
+                return (
+                  <m.tr
+                    key={p.id}
+                    initial={{ opacity: 0, y: 6 }}
+                    animate={{ opacity: isDimmed ? 0.4 : 1, y: 0 }}
+                    transition={{ duration: 0.18, delay: Math.min(i, 12) * 0.015, ease: 'easeOut' }}
+                    onClick={() => {
+                      if (invoiceMode) { if (isSelectable) toggleInvoiceItem(p.id) }
+                      else setSelected(p)
+                    }}
+                    style={{
+                      background: isChecked ? 'var(--accent-light)' : undefined,
+                      cursor: invoiceMode ? (isSelectable ? 'pointer' : 'default') : 'pointer',
+                    }}
+                  >
+                    {invoiceMode && (
+                      <TableCell style={{ pointerEvents: 'none' }}>
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          readOnly
+                          style={{ width: '16px', height: '16px', cursor: 'inherit', accentColor: 'var(--accent)' }}
+                        />
+                      </TableCell>
                     )}
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: 'var(--text-muted)', flexWrap: 'wrap' }}>
-                    <span style={{ background: 'var(--bg-surface-2)', border: '1px solid var(--border)', borderRadius: '5px', padding: '1px 7px', fontSize: '11px' }}>{p.printerNama}</span>
-                    {p.multiColorData
-                      ? <span style={{ background: 'var(--accent-light)', color: 'var(--accent)', borderRadius: '5px', padding: '1px 7px', fontSize: '11px', fontWeight: 600 }}>Multi Color ({p.multiColorData.length})</span>
-                      : <span style={{ background: 'var(--teal-light)', color: 'var(--teal)', borderRadius: '5px', padding: '1px 7px', fontSize: '11px', fontWeight: 600 }}>{p.materialNama}</span>
-                    }
-                    <span style={{ color: 'var(--text-muted)' }}>{(p.beratMaterial * 1000).toFixed(0)} g</span>
-                    <span style={{ marginLeft: 'auto', fontWeight: 700, fontSize: '13px', color: 'var(--text-primary)', textAlign: 'right' }}>
+                    <TableCell>
+                      <div style={{ fontWeight: 700, fontSize: '13px', color: 'var(--text-primary)' }}>{p.nama}</div>
+                      <div style={{ color: 'var(--text-muted)', fontSize: '12px' }}>{p.klien}</div>
+                      {p.deadline && (
+                        <div style={{ fontSize: '11px', color: 'var(--warning)', fontWeight: 600, marginTop: 2 }}>
+                          ⏰ {formatTgl(p.deadline)}
+                        </div>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <span style={{ background: 'var(--bg-surface-2)', border: '1px solid var(--border)', borderRadius: '5px', padding: '1px 7px', fontSize: '11px', whiteSpace: 'nowrap' }}>{p.printerNama}</span>
+                    </TableCell>
+                    <TableCell>
+                      {p.multiColorData
+                        ? <span style={{ background: 'var(--accent-light)', color: 'var(--accent)', borderRadius: '5px', padding: '1px 7px', fontSize: '11px', fontWeight: 600, whiteSpace: 'nowrap' }}>Multi Color ({p.multiColorData.length})</span>
+                        : <span style={{ background: 'var(--teal-light)', color: 'var(--teal)', borderRadius: '5px', padding: '1px 7px', fontSize: '11px', fontWeight: 600, whiteSpace: 'nowrap' }}>{p.materialNama}</span>
+                      }
+                    </TableCell>
+                    <TableCell align="right" style={{ color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{(p.beratMaterial * 1000).toFixed(0)} g</TableCell>
+                    <TableCell align="right" style={{ fontWeight: 700, fontSize: '13px', color: 'var(--text-primary)', whiteSpace: 'nowrap' }}>
                       {p.diskonTipe && <span style={{ fontSize: '11px', color: 'var(--text-muted)', textDecoration: 'line-through', marginRight: '4px' }}>{formatRp(p.nilaiJual)}</span>}
                       {formatRp(p.hargaFinal)}
-                    </span>
-                  </div>
-                </div>
-                <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexShrink: 0 }} onClick={e => e.stopPropagation()}>
-                  <StatusBadge status={p.status} />
-                  {!invoiceMode && (
-                    <button className="btn btn-secondary btn-sm" onClick={() => openEdit(p)}>Edit</button>
-                  )}
-                  {!invoiceMode && p.status === 'Antrian' && (
-                    <button className="btn btn-primary btn-sm" onClick={() => setConfirm({ action: 'mulai', item: p })}>Mulai</button>
-                  )}
-                  {!invoiceMode && p.status === 'Printing' && (
-                    <button className="btn btn-sm" style={{ background: 'var(--success)', color: '#fff' }} onClick={() => setConfirm({ action: 'selesai', item: p })}>Selesai</button>
-                  )}
-                  {!invoiceMode && ['Antrian', 'Printing'].includes(p.status) && (
-                    <button className="btn btn-sm" style={{ background: 'var(--danger-light)', color: 'var(--danger)' }} onClick={() => setConfirm({ action: 'batal', item: p })}>Batal</button>
-                  )}
-                  {!invoiceMode && ['Selesai', 'Dibatalkan'].includes(p.status) && (
-                    <button className="btn btn-sm" style={{ background: 'var(--danger-light)', color: 'var(--danger)' }} onClick={() => setConfirm({ action: 'hapus', item: p })}>Hapus</button>
-                  )}
-                </div>
-              </div>
-            )
-          })}
+                    </TableCell>
+                    <TableCell><StatusBadge status={p.status} /></TableCell>
+                    <TableCell align="right" onClick={e => e.stopPropagation()}>
+                      <div style={{ display: 'flex', gap: '6px', alignItems: 'center', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+                        {!invoiceMode && (
+                          <button className="btn btn-secondary btn-sm" onClick={() => openEdit(p)}>Edit</button>
+                        )}
+                        {!invoiceMode && p.status === 'Antrian' && (
+                          <button className="btn btn-primary btn-sm" onClick={() => setConfirm({ action: 'mulai', item: p })}>Mulai</button>
+                        )}
+                        {!invoiceMode && p.status === 'Printing' && (
+                          <button className="btn btn-sm" style={{ background: 'var(--success)', color: '#fff' }} onClick={() => setConfirm({ action: 'selesai', item: p })}>Selesai</button>
+                        )}
+                        {!invoiceMode && ['Antrian', 'Printing'].includes(p.status) && (
+                          <button className="btn btn-sm" style={{ background: 'var(--danger-light)', color: 'var(--danger)' }} onClick={() => setConfirm({ action: 'batal', item: p })}>Batal</button>
+                        )}
+                        {!invoiceMode && ['Selesai', 'Dibatalkan'].includes(p.status) && (
+                          <button className="btn btn-sm" style={{ background: 'var(--danger-light)', color: 'var(--danger)' }} onClick={() => setConfirm({ action: 'hapus', item: p })}>Hapus</button>
+                        )}
+                      </div>
+                    </TableCell>
+                  </m.tr>
+                )
+              })}
+            </TableBody>
+          </Table>
         </div>
+        </LazyMotion>
       )}
 
       {/* Create Form Modal */}
       {showForm && (
-        <div className="modal-overlay">
-          <div className="modal-box" style={{ width: '560px', maxHeight: '90vh', overflowY: 'auto' }}>
-            <div className="modal-header">
-              <h3>Buat Pesanan Baru</h3>
-              <button className="modal-close" onClick={resetForm}>✕</button>
-            </div>
-            <div className="modal-body">
+        <Modal width={560}>
+          <div className="modal-header">
+            <h3>Buat Pesanan Baru</h3>
+            <button className="modal-close" onClick={resetForm}>✕</button>
+          </div>
+          <div className="modal-body" style={{ maxHeight: '78vh', overflowY: 'auto' }}>
               {error && <div className="alert alert-danger" style={{ marginBottom: 12 }}>{error}</div>}
               <datalist id="klien-names">
                 {klienNama.map(n => <option key={n} value={n} />)}
@@ -526,26 +527,22 @@ export default function PesananPage() {
                   { label: 'Nama Pesanan', key: 'nama', required: true, placeholder: 'Nama pesanan' },
                   { label: 'Tipe', key: 'tipe', placeholder: 'Opsional' },
                 ].map(({ label, key, required, placeholder }) => (
-                  <div key={key}>
-                    <FormLabel required={required}>{label}</FormLabel>
+                  <FormField key={key} label={label} required={required}>
                     <input value={(form as any)[key]} onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))} placeholder={placeholder} />
-                  </div>
+                  </FormField>
                 ))}
-                <div>
-                  <FormLabel required>Klien</FormLabel>
+                <FormField label="Klien" required>
                   <input
                     list="klien-names"
                     value={form.klien}
                     onChange={e => setForm(f => ({ ...f, klien: e.target.value }))}
                     placeholder="Nama klien (atau pilih dari daftar)"
                   />
-                </div>
-                <div>
-                  <FormLabel>Deadline</FormLabel>
+                </FormField>
+                <FormField label="Deadline">
                   <input type="date" value={form.deadline} onChange={e => setForm(f => ({ ...f, deadline: e.target.value }))} />
-                </div>
-                <div>
-                  <FormLabel required>Printer</FormLabel>
+                </FormField>
+                <FormField label="Printer" required>
                   <select value={form.printerId} onChange={e => setForm(f => ({ ...f, printerId: e.target.value }))}>
                     <option value="">Pilih printer...</option>
                     {printers.filter(p => p.status === 'Idle').map(p =>
@@ -555,7 +552,7 @@ export default function PesananPage() {
                       <option key={p.id} value="" disabled>⛔ {p.nama} — {p.status}</option>
                     )}
                   </select>
-                </div>
+                </FormField>
               </div>
 
               {/* Toggle Multi Color */}
@@ -579,24 +576,22 @@ export default function PesananPage() {
               {!isMultiColor ? (
                 <div style={{ marginBottom: '12px' }}>
                   <div className="form-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                    <div>
-                      <FormLabel required>Material</FormLabel>
+                    <FormField label="Material" required>
                       <select value={form.materialId} onChange={e => setForm(f => ({ ...f, materialId: e.target.value }))}>
                         <option value="">Pilih material...</option>
                         {materials.map(m => <option key={m.id} value={m.id}>{m.nama} (stok: {m.stok} kg)</option>)}
                       </select>
-                    </div>
-                    <div>
-                      <FormLabel required>Berat Material (g)</FormLabel>
+                    </FormField>
+                    <FormField label="Berat Material (g)" required>
                       <input type="number" step="1" placeholder="0" value={form.beratMaterial} onChange={e => setForm(f => ({ ...f, beratMaterial: e.target.value }))} />
-                    </div>
+                    </FormField>
                   </div>
                   <MatInfo mat={materials.find(m => m.id === form.materialId)} />
                 </div>
               ) : (
                 <div style={{ marginBottom: '12px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                    <FormLabel>Material per Warna</FormLabel>
+                    <label className="form-label">Material per Warna</label>
                     <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
                       Total: {colorEntries.reduce((s, e) => s + (+e.beratGram || 0), 0)} g
                     </span>
@@ -644,16 +639,15 @@ export default function PesananPage() {
                   { label: 'Markup (%)', key: 'markup', type: 'number' },
                   { label: 'Nilai Jual (Rp)', key: 'nilaiJual', type: 'number', required: true },
                 ].map(({ label, key, type, step, placeholder, required }) => (
-                  <div key={key}>
-                    <FormLabel required={required}>{label}</FormLabel>
+                  <FormField key={key} label={label} required={required}>
                     <input type={type} step={step} value={(form as any)[key]} placeholder={placeholder} onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))} />
-                  </div>
+                  </FormField>
                 ))}
               </div>
 
               {/* Diskon */}
-              <div style={{ marginBottom: '12px' }}>
-                <FormLabel>Diskon</FormLabel>
+              <FormField label="Diskon">
+                <div style={{ marginBottom: '12px' }}>
                 <div className="form-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
                   <select value={form.diskonTipe} onChange={e => setForm(f => ({ ...f, diskonTipe: e.target.value, diskonNilai: '' }))}>
                     <option value="">Tidak ada</option>
@@ -679,12 +673,14 @@ export default function PesananPage() {
                     </div>
                   )
                 })()}
-              </div>
+                </div>
+              </FormField>
 
-              <div style={{ marginBottom: '12px' }}>
-                <FormLabel>Catatan</FormLabel>
+              <FormField label="Catatan">
+                <div style={{ marginBottom: '12px' }}>
                 <textarea value={form.catatan} onChange={e => setForm(f => ({ ...f, catatan: e.target.value }))} rows={2} style={{ resize: 'vertical' }} />
-              </div>
+                </div>
+              </FormField>
               <button className="btn btn-secondary" style={{ width: '100%', marginBottom: '12px', justifyContent: 'center' }} onClick={handlePreview}>
                 Hitung Preview HPP
               </button>
@@ -732,17 +728,16 @@ export default function PesananPage() {
                 <button className="btn btn-secondary btn-sm" onClick={resetForm}>Batal</button>
                 <button className="btn btn-primary btn-sm" onClick={handleSubmit}>Buat Pesanan</button>
               </div>
-            </div>
           </div>
-        </div>
+        </Modal>
       )}
 
       {showInvoicePreview && (
-        <div className="modal-overlay">
-          <div className="modal-box" style={{ width: '760px', maxHeight: '92vh', display: 'flex', flexDirection: 'column', padding: 0, overflow: 'hidden' }}>
+        <Modal width={760}>
+          <div style={{ maxHeight: '92vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
             <div className="modal-header" style={{ padding: '14px 20px', flexShrink: 0 }}>
               <div style={{ flex: 1, minWidth: 0, marginRight: '12px' }}>
-                <div style={{ fontWeight: 700, fontSize: '15px', fontFamily: "'Sora', sans-serif", marginBottom: '8px' }}>Preview Invoice</div>
+                <div style={{ fontWeight: 700, fontSize: '15px', fontFamily: "'Manrope', sans-serif", marginBottom: '8px' }}>Preview Invoice</div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                   <span style={{ fontSize: '12px', color: 'var(--text-muted)', flexShrink: 0 }}>Tagihan kepada:</span>
                   <input
@@ -798,12 +793,11 @@ export default function PesananPage() {
               />
             </div>
           </div>
-        </div>
+        </Modal>
       )}
 
       {editPesanan && (
-        <div className="modal-overlay">
-          <div className="modal-box" style={{ width: '480px' }}>
+        <Modal width={480}>
             <div className="modal-header">
               <div>
                 <h3 style={{ marginBottom: '2px' }}>Edit Pesanan</h3>
@@ -825,17 +819,14 @@ export default function PesananPage() {
                     { label: 'Klien', key: 'klien', required: true },
                     { label: 'Tipe', key: 'tipe' },
                   ] as { label: string; key: string; required?: boolean }[]).map(({ label, key, required }) => (
-                    <div key={key}>
-                      <FormLabel required={required}>{label}</FormLabel>
+                    <FormField key={key} label={label} required={required}>
                       <input value={(editForm as any)[key]} onChange={e => setEditForm(f => ({ ...f, [key]: e.target.value }))} />
-                    </div>
+                    </FormField>
                   ))}
-                  <div>
-                    <FormLabel required>Nilai Jual (Rp)</FormLabel>
+                  <FormField label="Nilai Jual (Rp)" required>
                     <input type="number" value={editForm.nilaiJual} onChange={e => setEditForm(f => ({ ...f, nilaiJual: e.target.value }))} />
-                  </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                    <FormLabel>Diskon</FormLabel>
+                  </FormField>
+                  <FormField label="Diskon">
                     <div className="form-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}>
                       <select value={editForm.diskonTipe} onChange={e => setEditForm(f => ({ ...f, diskonTipe: e.target.value, diskonNilai: '' }))}>
                         <option value="">Tidak ada</option>
@@ -844,15 +835,15 @@ export default function PesananPage() {
                       </select>
                       <input type="number" disabled={!editForm.diskonTipe} value={editForm.diskonNilai} onChange={e => setEditForm(f => ({ ...f, diskonNilai: e.target.value }))} style={{ opacity: editForm.diskonTipe ? 1 : 0.4 }} />
                     </div>
-                  </div>
+                  </FormField>
                 </>)}
-                <div>
-                  <FormLabel>Deadline</FormLabel>
+                <FormField label="Deadline">
                   <input type="date" value={editForm.deadline} onChange={e => setEditForm(f => ({ ...f, deadline: e.target.value }))} />
-                </div>
+                </FormField>
                 <div style={{ gridColumn: editPesanan.status !== 'Antrian' ? '1/-1' : undefined }}>
-                  <FormLabel>Catatan</FormLabel>
-                  <input value={editForm.catatan} onChange={e => setEditForm(f => ({ ...f, catatan: e.target.value }))} placeholder="Opsional" />
+                  <FormField label="Catatan">
+                    <input value={editForm.catatan} onChange={e => setEditForm(f => ({ ...f, catatan: e.target.value }))} placeholder="Opsional" />
+                  </FormField>
                 </div>
               </div>
               <div className="modal-footer">
@@ -860,8 +851,7 @@ export default function PesananPage() {
                 <button className="btn btn-primary btn-sm" onClick={handleEditSave}>Simpan Perubahan</button>
               </div>
             </div>
-          </div>
-        </div>
+        </Modal>
       )}
 
       {selected && <DetailModal pesanan={selected} onClose={() => setSelected(null)} />}

@@ -144,4 +144,8 @@ export interface DashboardKPI {
   orderMendekatiDeadline: Pesanan[]
   materialHampirHabis: Material[]
   aktivitasTerbaru: Aktivitas[]
+  trendPendapatanPct: number | null
+  trendPengeluaranPct: number | null
+  trendProfitPct: number | null
+  trendOrderSelesaiPct: number | null
 }

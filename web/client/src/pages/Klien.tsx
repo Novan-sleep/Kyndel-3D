@@ -1,10 +1,14 @@
 import { useState, useEffect, useCallback } from 'react'
+import { LazyMotion, domAnimation, m } from 'motion/react'
 import { useAppDispatch, useAppSelector } from '../store/hooks'
 import { fetchKliens, createKlien, updateKlien, deleteKlien } from '../store/klienSlice'
 import { formatRp, formatTgl } from '../lib/api'
+import { getInitials } from '../lib/initials'
 import { Klien } from '../types'
 import ConfirmDialog from '../components/ui/ConfirmDialog'
 import EmptyState from '../components/ui/EmptyState'
+import FormField from '../components/ui/FormField'
+import Modal from '../components/ui/Modal'
 
 export default function KlienPage() {
   const dispatch = useAppDispatch()
@@ -91,11 +95,14 @@ export default function KlienPage() {
       {filtered.length === 0
         ? <EmptyState message={search ? 'Klien tidak ditemukan' : 'Belum ada klien'} icon="user" />
         : (
+          <LazyMotion features={domAnimation} strict>
           <div className="animate-fade-up-1" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(290px, 1fr))', gap: 'var(--spacing-md)' }}>
             {filtered.map(k => (
-              <div
+              <m.div
                 key={k.id}
-                className="card card-hover"
+                className="card"
+                whileHover={{ y: -3 }}
+                transition={{ duration: 0.15, ease: 'easeOut' }}
                 style={{ padding: 'var(--spacing-lg)', display: 'flex', flexDirection: 'column', cursor: 'pointer', borderLeft: '3px solid var(--accent)' }}
                 onClick={() => setSelected(selected?.id === k.id ? null : k)}
               >
@@ -106,9 +113,9 @@ export default function KlienPage() {
                       width: 36, height: 36, borderRadius: '50%', flexShrink: 0,
                       background: 'linear-gradient(135deg, var(--accent), var(--accent-dark))',
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      fontSize: '13px', fontWeight: 800, color: '#fff', fontFamily: "'Sora', sans-serif",
+                      fontSize: '13px', fontWeight: 800, color: '#fff', fontFamily: "'Manrope', sans-serif",
                     }}>
-                      {k.nama.split(/\s+/).slice(0, 2).map(w => w[0]).join('').toUpperCase()}
+                      {getInitials(k.nama)}
                     </div>
                     <div>
                       <div style={{ fontWeight: 700, fontSize: '14px' }}>{k.nama}</div>
@@ -156,52 +163,46 @@ export default function KlienPage() {
                     >Hapus</button>
                   )}
                 </div>
-              </div>
+              </m.div>
             ))}
           </div>
+          </LazyMotion>
         )}
 
       {/* Form Modal */}
       {showForm && (
-        <div className="modal-overlay">
-          <div className="modal-box" style={{ width: '460px' }}>
-            <div className="modal-header">
-              <h3>{editItem ? 'Edit Klien' : 'Tambah Klien'}</h3>
-              <button className="modal-close" onClick={() => { setShowForm(false); setError('') }}>✕</button>
+        <Modal width={460}>
+          <div className="modal-header">
+            <h3>{editItem ? 'Edit Klien' : 'Tambah Klien'}</h3>
+            <button className="modal-close" onClick={() => { setShowForm(false); setError('') }}>✕</button>
+          </div>
+          <div className="modal-body">
+            {error && <div className="alert alert-danger" style={{ marginBottom: 12 }}>{error}</div>}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: 'var(--spacing-lg)' }}>
+              <FormField label="Nama" required>
+                <input value={form.nama} onChange={e => setForm(f => ({ ...f, nama: e.target.value }))} placeholder="Nama lengkap klien" />
+              </FormField>
+              <div className="form-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                <FormField label="Telepon / WhatsApp">
+                  <input value={form.telepon} onChange={e => setForm(f => ({ ...f, telepon: e.target.value }))} placeholder="08xxxxxxxxxx" />
+                </FormField>
+                <FormField label="Email">
+                  <input type="email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} placeholder="email@contoh.com" />
+                </FormField>
+              </div>
+              <FormField label="Alamat">
+                <input value={form.alamat} onChange={e => setForm(f => ({ ...f, alamat: e.target.value }))} placeholder="Alamat klien (opsional)" />
+              </FormField>
+              <FormField label="Catatan">
+                <textarea value={form.catatan} onChange={e => setForm(f => ({ ...f, catatan: e.target.value }))} rows={2} placeholder="Preferensi, catatan khusus, dll." />
+              </FormField>
             </div>
-            <div className="modal-body">
-              {error && <div className="alert alert-danger" style={{ marginBottom: 12 }}>{error}</div>}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: 'var(--spacing-lg)' }}>
-                <div>
-                  <label className="form-label">Nama <span style={{ color: 'var(--danger)' }}>*</span></label>
-                  <input value={form.nama} onChange={e => setForm(f => ({ ...f, nama: e.target.value }))} placeholder="Nama lengkap klien" />
-                </div>
-                <div className="form-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                  <div>
-                    <label className="form-label">Telepon / WhatsApp</label>
-                    <input value={form.telepon} onChange={e => setForm(f => ({ ...f, telepon: e.target.value }))} placeholder="08xxxxxxxxxx" />
-                  </div>
-                  <div>
-                    <label className="form-label">Email</label>
-                    <input type="email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} placeholder="email@contoh.com" />
-                  </div>
-                </div>
-                <div>
-                  <label className="form-label">Alamat</label>
-                  <input value={form.alamat} onChange={e => setForm(f => ({ ...f, alamat: e.target.value }))} placeholder="Alamat klien (opsional)" />
-                </div>
-                <div>
-                  <label className="form-label">Catatan</label>
-                  <textarea value={form.catatan} onChange={e => setForm(f => ({ ...f, catatan: e.target.value }))} rows={2} placeholder="Preferensi, catatan khusus, dll." />
-                </div>
-              </div>
-              <div className="modal-footer">
-                <button className="btn btn-secondary btn-sm" onClick={() => { setShowForm(false); setError('') }}>Batal</button>
-                <button className="btn btn-primary btn-sm" onClick={handleSubmit}>Simpan</button>
-              </div>
+            <div className="modal-footer">
+              <button className="btn btn-secondary btn-sm" onClick={() => { setShowForm(false); setError('') }}>Batal</button>
+              <button className="btn btn-primary btn-sm" onClick={handleSubmit}>Simpan</button>
             </div>
           </div>
-        </div>
+        </Modal>
       )}
 
       {confirm && (

@@ -1,5 +1,5 @@
 import { getDb } from '../db'
-import { generateId, nowIso } from '../utils'
+import { generateId, nowIso, bulanLalu } from '../utils'
 import { Transaksi } from '../types'
 
 function rowToTransaksi(row: any): Transaksi {
@@ -39,6 +39,14 @@ export const transaksiRepository = {
   },
   sumPengeluaranBulanIni(): number {
     const month = new Date().toISOString().slice(0, 7)
+    return (getDb().prepare("SELECT COALESCE(SUM(jumlah), 0) as total FROM transaksi WHERE jenis = 'pengeluaran' AND tanggal LIKE ?").get(`${month}%`) as any).total
+  },
+  sumPendapatanBulanLalu(): number {
+    const month = bulanLalu()
+    return (getDb().prepare("SELECT COALESCE(SUM(CASE WHEN is_auto_generated = 1 THEN jumlah - COALESCE(hpp_snapshot, 0) ELSE jumlah END), 0) as total FROM transaksi WHERE jenis = 'pendapatan' AND tanggal LIKE ?").get(`${month}%`) as any).total
+  },
+  sumPengeluaranBulanLalu(): number {
+    const month = bulanLalu()
     return (getDb().prepare("SELECT COALESCE(SUM(jumlah), 0) as total FROM transaksi WHERE jenis = 'pengeluaran' AND tanggal LIKE ?").get(`${month}%`) as any).total
   },
   rataRataNilaiJual(): number {

@@ -2,12 +2,14 @@ import { useState, useEffect } from 'react'
 import { useAppDispatch, useAppSelector } from '../store/hooks'
 import { fetchSetting, updateSetting } from '../store/settingSlice'
 import { api, downloadBlob } from '../lib/api'
+import FormField from '../components/ui/FormField'
+import DataRow from '../components/ui/DataRow'
 
 function SectionCard({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="card" style={{ overflow: 'hidden' }}>
       <div style={{ padding: '13px var(--spacing-xl)', borderBottom: '1px solid var(--border)', background: 'linear-gradient(90deg, var(--accent-light), transparent)' }}>
-        <h3 style={{ margin: 0, fontSize: '13px', fontFamily: "'Sora', sans-serif", fontWeight: 700 }}>{title}</h3>
+        <h3 style={{ margin: 0, fontSize: '13px', fontFamily: "'Manrope', sans-serif", fontWeight: 700 }}>{title}</h3>
       </div>
       <div style={{ padding: 'var(--spacing-xl)' }}>{children}</div>
     </div>
@@ -121,18 +123,15 @@ export default function SettingPage() {
       {/* Info Toko */}
       <SectionCard title="Info Toko">
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-md)' }}>
-          <div>
-            <label className="form-label">Nama Toko <span style={{ color: 'var(--danger)' }}>*</span></label>
+          <FormField label="Nama Toko" required>
             <input value={form.namaToko} onChange={set('namaToko')} placeholder="Nama toko Anda" />
-          </div>
-          <div>
-            <label className="form-label">Alamat</label>
+          </FormField>
+          <FormField label="Alamat">
             <input value={form.alamat} onChange={set('alamat')} placeholder="Alamat lengkap toko" />
-          </div>
-          <div>
-            <label className="form-label">Nomor Telepon / WhatsApp</label>
+          </FormField>
+          <FormField label="Nomor Telepon / WhatsApp">
             <input value={form.telepon} onChange={set('telepon')} placeholder="Contoh: 08123456789" />
-          </div>
+          </FormField>
           <div>
             <label className="form-label">Logo Toko</label>
             <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
@@ -168,19 +167,16 @@ export default function SettingPage() {
       <SectionCard title="Info Pembayaran">
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-md)' }}>
           <div className="form-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-            <div>
-              <label className="form-label">Nama Bank</label>
+            <FormField label="Nama Bank">
               <input value={form.bankNama} onChange={set('bankNama')} placeholder="Contoh: BCA, Mandiri, BRI" />
-            </div>
-            <div>
-              <label className="form-label">No. Rekening</label>
+            </FormField>
+            <FormField label="No. Rekening">
               <input value={form.bankNoRekening} onChange={set('bankNoRekening')} placeholder="Contoh: 1234567890" />
-            </div>
+            </FormField>
           </div>
-          <div>
-            <label className="form-label">Atas Nama</label>
+          <FormField label="Atas Nama">
             <input value={form.bankAtasNama} onChange={set('bankAtasNama')} placeholder="Nama pemilik rekening" />
-          </div>
+          </FormField>
           <div style={{ fontSize: '11px', color: 'var(--text-muted)', padding: '8px 12px', background: 'var(--accent-light)', borderRadius: 'var(--radius-md)', borderLeft: '3px solid var(--accent)' }}>
             Info ini akan tampil di bagian bawah invoice sebagai panduan pembayaran klien. Kosongkan jika tidak ingin ditampilkan.
           </div>
@@ -190,16 +186,14 @@ export default function SettingPage() {
       {/* Pengaturan Global */}
       <SectionCard title="Pengaturan Global">
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-md)', marginBottom: 'var(--spacing-xl)' }}>
-          <div>
-            <label className="form-label">Tarif Listrik (Rp/kWh)</label>
+          <FormField label="Tarif Listrik (Rp/kWh)">
             <input type="number" value={form.tarifListrik} onChange={set('tarifListrik')} />
             <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '5px' }}>Digunakan untuk kalkulasi biaya listrik pada setiap pesanan.</div>
-          </div>
-          <div>
-            <label className="form-label">Markup Default (%)</label>
+          </FormField>
+          <FormField label="Markup Default (%)">
             <input type="number" value={form.markupDefault} onChange={set('markupDefault')} />
             <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '5px' }}>Nilai markup awal saat membuat pesanan baru.</div>
-          </div>
+          </FormField>
         </div>
       </SectionCard>
 
@@ -241,10 +235,7 @@ export default function SettingPage() {
             ['Stack', 'Express + React + TypeScript'],
             ['Database', 'SQLite (better-sqlite3)'],
           ].map(([label, val]) => (
-            <div key={label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '9px 12px', background: 'var(--bg-surface-2)', borderRadius: 'var(--radius-md)' }}>
-              <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{label}</span>
-              <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-primary)', fontFamily: "'Sora', sans-serif" }}>{val}</span>
-            </div>
+            <DataRow key={label} label={label} value={val} variant="chip" />
           ))}
         </div>
       </SectionCard>

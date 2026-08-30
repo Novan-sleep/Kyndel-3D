@@ -1,13 +1,9 @@
 import { useState, useEffect, useRef } from 'react'
-import { Page } from '../../App'
+import { Page, pageTitles } from '../../lib/navigation'
 import { api } from '../../lib/api'
 import { Pesanan, Material, Printer, DashboardKPI } from '../../types'
-
-const pageTitles: Record<Page, string> = {
-  dashboard: 'Dashboard', pesanan: 'Manajemen Pesanan', klien: 'Manajemen Klien',
-  printer: 'Manajemen Printer', material: 'Manajemen Material',
-  keuangan: 'Keuangan', statistik: 'Statistik', aktivitas: 'Log Aktivitas', setting: 'Pengaturan',
-}
+import { useClickOutside } from '../../hooks/useClickOutside'
+import { useDebounce } from '../../hooks/useDebounce'
 
 const SearchIcon = () => (
   <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
@@ -159,9 +155,11 @@ export default function Topbar({ currentPage, theme, onToggleTheme, onNavigate, 
   }
 
   // Search debounce
+  const debouncedSearch = useDebounce(searchVal, 300)
   useEffect(() => {
-    if (searchVal.length < 2) { setSearchResults([]); return }
-    const t = setTimeout(async () => {
+    if (debouncedSearch.length < 2) { setSearchResults([]); return }
+    let cancelled = false
+    ;(async () => {
       setSearchLoading(true)
       try {
         if (!cacheRef.current) {
@@ -170,7 +168,7 @@ export default function Topbar({ currentPage, theme, onToggleTheme, onNavigate, 
           ])
           cacheRef.current = { pesanan: pr, material: mr, printer: tr }
         }
-        const q = searchVal.toLowerCase()
+        const q = debouncedSearch.toLowerCase()
         const results: SearchResult[] = []
         for (const p of cacheRef.current.pesanan) {
           if (p.nama.toLowerCase().includes(q) || p.klien.toLowerCase().includes(q)) {
@@ -188,23 +186,17 @@ export default function Topbar({ currentPage, theme, onToggleTheme, onNavigate, 
             results.push({ type: 'printer', id: p.id, title: p.nama, subtitle: p.model || p.tipe || '', page: 'printer', status: p.status })
           }
         }
-        setSearchResults(results.slice(0, 8))
+        if (!cancelled) setSearchResults(results.slice(0, 8))
       } finally {
-        setSearchLoading(false)
+        if (!cancelled) setSearchLoading(false)
       }
-    }, 300)
-    return () => clearTimeout(t)
-  }, [searchVal])
+    })()
+    return () => { cancelled = true }
+  }, [debouncedSearch])
 
   // Click outside to close
-  useEffect(() => {
-    function onDown(e: MouseEvent) {
-      if (searchRef.current && !searchRef.current.contains(e.target as Node)) setShowSearch(false)
-      if (notifRef.current && !notifRef.current.contains(e.target as Node)) setShowNotif(false)
-    }
-    document.addEventListener('mousedown', onDown)
-    return () => document.removeEventListener('mousedown', onDown)
-  }, [])
+  useClickOutside(searchRef, () => setShowSearch(false))
+  useClickOutside(notifRef, () => setShowNotif(false))
 
   function handleSearchSelect(r: SearchResult) {
     setSearchVal('')
@@ -359,7 +351,7 @@ export default function Topbar({ currentPage, theme, onToggleTheme, onNavigate, 
                 display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                 padding: '12px 14px 10px', borderBottom: '1px solid var(--border)'
               }}>
-                <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)', fontFamily: "'Sora', sans-serif" }}>
+                <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)', fontFamily: "'Manrope', sans-serif" }}>
                   Notifikasi
                 </span>
                 <button

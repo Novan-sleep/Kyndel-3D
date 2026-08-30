@@ -4,6 +4,7 @@ import { fetchKPI } from '../store/dashboardSlice'
 import { formatRp, formatTgl } from '../lib/api'
 import { DashboardKPI } from '../types'
 import StatusBadge from '../components/ui/StatusBadge'
+import KpiCard from '../components/ui/KpiCard'
 
 // ── Icons ──────────────────────────────────────────────────────────────────
 
@@ -84,37 +85,6 @@ function SectionLabel({ children }: { children: string }) {
         {children}
       </span>
       <div style={{ height: 1, flex: 1, background: 'var(--border)' }} />
-    </div>
-  )
-}
-
-interface KpiCardProps {
-  label: string
-  value: string | number
-  color?: string
-  accent?: string
-  accentLight?: string
-  icon?: React.ReactNode
-}
-
-function KpiCard({ label, value, color, accent, accentLight, icon }: KpiCardProps) {
-  return (
-    <div className="kpi-card">
-      {accent && <div className="kpi-card-accent" style={{ background: accent }} />}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
-        <div className="kpi-label">{label}</div>
-        {icon && (
-          <div style={{
-            width: 32, height: 32, borderRadius: 'var(--radius-md)',
-            background: accentLight ?? 'var(--bg-surface-2)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            color: color ?? 'var(--text-secondary)', flexShrink: 0,
-          }}>
-            {icon}
-          </div>
-        )}
-      </div>
-      <div className="kpi-value" style={{ color: color ?? 'var(--text-primary)' }}>{value}</div>
     </div>
   )
 }
@@ -206,15 +176,15 @@ export default function Dashboard() {
         <KpiCard label="Order Aktif"        value={kpi.totalOrderAktif}           color="var(--accent)"          accent="var(--accent)"          accentLight="var(--accent-light)"  icon={<IcOrderAktif />} />
         <KpiCard label="Antrian"            value={kpi.totalOrderAntrian}         color="var(--status-antrian)"  accent="var(--status-antrian)"  accentLight="var(--status-antrian-bg)" icon={<IcAntrian />} />
         <KpiCard label="Sedang Print"       value={kpi.totalOrderPrinting}        color="var(--status-printing)" accent="var(--status-printing)" accentLight="var(--status-printing-bg)" icon={<IcPrinting />} />
-        <KpiCard label="Selesai Bulan Ini"  value={kpi.totalOrderSelesaiBulanIni} color="var(--status-selesai)"  accent="var(--status-selesai)"  accentLight="var(--status-selesai-bg)"  icon={<IcSelesai />} />
+        <KpiCard label="Selesai Bulan Ini"  value={kpi.totalOrderSelesaiBulanIni} color="var(--status-selesai)"  accent="var(--status-selesai)"  accentLight="var(--status-selesai-bg)"  icon={<IcSelesai />} trend={kpi.trendOrderSelesaiPct} />
       </div>
 
       {/* Section: Keuangan */}
       <SectionLabel>Keuangan Bulan Ini</SectionLabel>
       <div className="animate-fade-up-1 rgrid-3" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 'var(--spacing-md)' }}>
-        <KpiCard label="Pendapatan"  value={formatRp(kpi.totalPendapatanBulanIni)}  color="var(--success)" accent="var(--success)" accentLight="var(--success-light)" icon={<IcPendapatan />} />
-        <KpiCard label="Pengeluaran" value={formatRp(kpi.totalPengeluaranBulanIni)} color="var(--danger)"  accent="var(--danger)"  accentLight="var(--danger-light)"  icon={<IcPengeluaran />} />
-        <KpiCard label="Profit"      value={formatRp(profit)}                        color={profitColor}    accent={profitColor}    accentLight={profitLight}           icon={<IcProfit />} />
+        <KpiCard label="Pendapatan"  value={formatRp(kpi.totalPendapatanBulanIni)}  color="var(--success)" accent="var(--success)" accentLight="var(--success-light)" icon={<IcPendapatan />} trend={kpi.trendPendapatanPct} />
+        <KpiCard label="Pengeluaran" value={formatRp(kpi.totalPengeluaranBulanIni)} color="var(--danger)"  accent="var(--danger)"  accentLight="var(--danger-light)"  icon={<IcPengeluaran />} trend={kpi.trendPengeluaranPct} invertTrend />
+        <KpiCard label="Profit"      value={formatRp(profit)}                        color={profitColor}    accent={profitColor}    accentLight={profitLight}           icon={<IcProfit />} trend={kpi.trendProfitPct} />
       </div>
 
       {/* Section: Printer & Material */}
@@ -277,7 +247,7 @@ export default function Dashboard() {
       {/* Activity Timeline */}
       <div className="animate-fade-up-3 card" style={{ overflow: 'hidden' }}>
         <div style={{ padding: '12px var(--spacing-lg)', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)', fontFamily: "'Sora', sans-serif" }}>Aktivitas Terbaru</span>
+          <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)', fontFamily: "'Manrope', sans-serif" }}>Aktivitas Terbaru</span>
           <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{kpi.aktivitasTerbaru.length} entri</span>
         </div>
         <ActivityTimeline items={kpi.aktivitasTerbaru} />

@@ -1,10 +1,15 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
+import { LazyMotion, domAnimation, m } from 'motion/react'
 import { useAppDispatch, useAppSelector } from '../store/hooks'
 import { fetchPrinters, createPrinter, updatePrinter, setPrinterStatus, deletePrinter } from '../store/printersSlice'
 import { Printer } from '../types'
 import StatusBadge from '../components/ui/StatusBadge'
 import ConfirmDialog from '../components/ui/ConfirmDialog'
 import EmptyState from '../components/ui/EmptyState'
+import DataRow from '../components/ui/DataRow'
+import FormField from '../components/ui/FormField'
+import Modal from '../components/ui/Modal'
+import { useClickOutside } from '../hooks/useClickOutside'
 
 export default function PrinterPage() {
   const dispatch = useAppDispatch()
@@ -15,13 +20,9 @@ export default function PrinterPage() {
   const [statusMenu, setStatusMenu] = useState<string | null>(null)
   const [error, setError] = useState('')
   const [form, setForm] = useState({ nama: '', model: '', tipe: '', watt: '', catatan: '' })
+  const statusMenuRef = useRef<HTMLDivElement>(null)
 
-  useEffect(() => {
-    if (!statusMenu) return
-    const close = () => setStatusMenu(null)
-    window.addEventListener('click', close)
-    return () => window.removeEventListener('click', close)
-  }, [statusMenu])
+  useClickOutside(statusMenuRef, () => setStatusMenu(null))
 
   useEffect(() => { dispatch(fetchPrinters()) }, [dispatch])
 
@@ -99,9 +100,10 @@ export default function PrinterPage() {
       {error && <div className="alert alert-danger" style={{ marginBottom: 'var(--spacing-md)' }}>{error}</div>}
 
       {printers.length === 0 ? <EmptyState message="Belum ada printer" icon="printer" /> : (
+        <LazyMotion features={domAnimation} strict>
         <div className="animate-fade-up-1" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 'var(--spacing-md)' }}>
           {printers.map(p => (
-            <div key={p.id} className="card card-hover" style={{ padding: 'var(--spacing-lg)', display: 'flex', flexDirection: 'column', borderLeft: `3px solid ${statusBorder[p.status] ?? 'var(--border)'}` }}>
+            <m.div key={p.id} className="card" whileHover={{ y: -3 }} transition={{ duration: 0.15, ease: 'easeOut' }} style={{ padding: 'var(--spacing-lg)', display: 'flex', flexDirection: 'column', borderLeft: `3px solid ${statusBorder[p.status] ?? 'var(--border)'}` }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
                 <div>
                   <div style={{ fontWeight: 700, marginBottom: '3px', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px' }}>
@@ -122,16 +124,9 @@ export default function PrinterPage() {
                 <StatusBadge status={p.status} />
               </div>
 
-              <div style={{ fontSize: '12px', color: 'var(--text-secondary)', display: 'flex', flexDirection: 'column', gap: '6px', flex: 1 }}>
-                {[
-                  ['Konsumsi', `${p.watt} W`],
-                  ['Total Jam', `${p.totalJam.toFixed(1)} jam`],
-                ].map(([label, val]) => (
-                  <div key={label} style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 0', borderBottom: '1px solid var(--border-subtle)' }}>
-                    <span style={{ color: 'var(--text-muted)' }}>{label}</span>
-                    <span style={{ fontWeight: 500 }}>{val}</span>
-                  </div>
-                ))}
+              <div style={{ fontSize: '12px', color: 'var(--text-secondary)', display: 'flex', flexDirection: 'column', flex: 1 }}>
+                <DataRow label="Konsumsi" value={`${p.watt} W`} />
+                <DataRow label="Total Jam" value={`${p.totalJam.toFixed(1)} jam`} />
                 {p.catatan && (
                   <div style={{ color: 'var(--text-muted)', marginTop: '4px', fontSize: '11px', fontStyle: 'italic' }}>{p.catatan}</div>
                 )}
@@ -152,7 +147,7 @@ export default function PrinterPage() {
               <div style={{ display: 'flex', gap: '8px', marginTop: '14px' }}>
                 <button className="btn btn-secondary btn-sm" style={{ flex: 1 }} onClick={() => openEdit(p)}>Edit</button>
                 {p.status !== 'Printing' && (
-                  <div style={{ position: 'relative' }} onClick={e => e.stopPropagation()}>
+                  <div ref={statusMenu === p.id ? statusMenuRef : undefined} style={{ position: 'relative' }} onClick={e => e.stopPropagation()}>
                     <button
                       className="btn btn-secondary btn-sm"
                       onClick={() => setStatusMenu(statusMenu === p.id ? null : p.id)}
@@ -193,53 +188,48 @@ export default function PrinterPage() {
                   <button className="btn btn-sm" style={{ background: 'var(--danger-light)', color: 'var(--danger)' }} onClick={() => setConfirm(p)}>Hapus</button>
                 )}
               </div>
-            </div>
+            </m.div>
           ))}
         </div>
+        </LazyMotion>
       )}
 
       {showForm && (
-        <div className="modal-overlay">
-          <div className="modal-box" style={{ width: '440px' }}>
-            <div className="modal-header">
-              <h3>{editItem ? 'Edit Printer' : 'Tambah Printer'}</h3>
-              <button className="modal-close" onClick={() => { setShowForm(false); setError('') }}>✕</button>
-            </div>
-            <div className="modal-body">
+        <Modal width={440}>
+          <div className="modal-header">
+            <h3>{editItem ? 'Edit Printer' : 'Tambah Printer'}</h3>
+            <button className="modal-close" onClick={() => { setShowForm(false); setError('') }}>✕</button>
+          </div>
+          <div className="modal-body">
               {error && <div className="alert alert-danger" style={{ marginBottom: 12 }}>{error}</div>}
               <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: 'var(--spacing-lg)' }}>
                 {[
                   { label: 'Nama', key: 'nama', required: true },
                   { label: 'Model', key: 'model' },
                 ].map(({ label, key, required }) => (
-                  <div key={key}>
-                    <label className="form-label">{label}{required && <span style={{ color: 'var(--danger)', marginLeft: 2 }}>*</span>}</label>
+                  <FormField key={key} label={label} required={required}>
                     <input value={(form as any)[key]} onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))} />
-                  </div>
+                  </FormField>
                 ))}
-                <div>
-                  <label className="form-label">Tipe</label>
+                <FormField label="Tipe">
                   <select value={form.tipe} onChange={e => setForm(f => ({ ...f, tipe: e.target.value }))}>
                     <option value="">Pilih...</option>
                     {['FDM', 'Resin', 'SLA', 'SLS'].map(t => <option key={t} value={t}>{t}</option>)}
                   </select>
-                </div>
-                <div>
-                  <label className="form-label">Watt <span style={{ color: 'var(--danger)' }}>*</span></label>
+                </FormField>
+                <FormField label="Watt" required>
                   <input type="number" value={form.watt} onChange={e => setForm(f => ({ ...f, watt: e.target.value }))} />
-                </div>
-                <div>
-                  <label className="form-label">Catatan</label>
+                </FormField>
+                <FormField label="Catatan">
                   <textarea value={form.catatan} onChange={e => setForm(f => ({ ...f, catatan: e.target.value }))} rows={2} />
-                </div>
+                </FormField>
               </div>
               <div className="modal-footer">
                 <button className="btn btn-secondary btn-sm" onClick={() => { setShowForm(false); setError('') }}>Batal</button>
                 <button className="btn btn-primary btn-sm" onClick={handleSubmit}>Simpan</button>
               </div>
-            </div>
           </div>
-        </div>
+        </Modal>
       )}
 
       {confirm && <ConfirmDialog title="Hapus Printer" message={`Hapus printer "${confirm.nama}"?`} onConfirm={handleDelete} onCancel={() => setConfirm(null)} confirmLabel="Hapus" danger />}

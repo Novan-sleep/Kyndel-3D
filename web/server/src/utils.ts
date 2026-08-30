@@ -10,6 +10,12 @@ export function nowIso(): string {
   return new Date().toISOString()
 }
 
+export function bulanLalu(): string {
+  const d = new Date()
+  d.setMonth(d.getMonth() - 1)
+  return d.toISOString().slice(0, 7)
+}
+
 export class HttpError extends Error {
   status: number
   constructor(status: number, message: string) {

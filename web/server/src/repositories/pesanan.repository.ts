@@ -1,5 +1,5 @@
 import { getDb } from '../db'
-import { generateId, nowIso } from '../utils'
+import { generateId, nowIso, bulanLalu } from '../utils'
 import { Pesanan, PesananStatus } from '../types'
 
 function rowToPesanan(row: any): Pesanan {
@@ -91,6 +91,10 @@ export const pesananRepository = {
   },
   countSelesaiBulanIni(): number {
     const month = new Date().toISOString().slice(0, 7)
+    return (getDb().prepare("SELECT COUNT(*) as cnt FROM pesanan WHERE status = 'Selesai' AND completed_at LIKE ?").get(`${month}%`) as any).cnt
+  },
+  countSelesaiBulanLalu(): number {
+    const month = bulanLalu()
     return (getDb().prepare("SELECT COUNT(*) as cnt FROM pesanan WHERE status = 'Selesai' AND completed_at LIKE ?").get(`${month}%`) as any).cnt
   },
   countDibatalkanBulanIni(): number {

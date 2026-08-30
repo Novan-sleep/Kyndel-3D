@@ -5,6 +5,10 @@ import { api, formatRp, formatTgl, downloadBlob } from '../lib/api'
 import { Transaksi } from '../types'
 import ConfirmDialog from '../components/ui/ConfirmDialog'
 import EmptyState from '../components/ui/EmptyState'
+import FormField from '../components/ui/FormField'
+import Modal from '../components/ui/Modal'
+import { Table, TableHeader, TableBody, TableFooter, TableRow, TableHead, TableCell } from '../components/ui/Table'
+import LineChart, { LineSeries } from '../components/charts/LineChart'
 
 type ChartPeriod = 'minggu' | 'bulan' | 'tahun'
 
@@ -15,136 +19,11 @@ interface ChartPoint {
   profit: number
 }
 
-function fmtShort(n: number): string {
-  const abs = Math.abs(n)
-  const sign = n < 0 ? '-' : ''
-  if (abs >= 1_000_000_000) return `${sign}${(abs / 1_000_000_000).toFixed(1)}M`
-  if (abs >= 1_000_000) return `${sign}${(abs / 1_000_000).toFixed(1)}jt`
-  if (abs >= 1_000) return `${sign}${(abs / 1_000).toFixed(0)}rb`
-  return `${sign}${abs}`
-}
-
-function LineChart({ data, loading }: { data: ChartPoint[]; loading: boolean }) {
-  const [hoverIdx, setHoverIdx] = useState<number | null>(null)
-
-  const W = 900, H = 260
-  const padL = 72, padR = 20, padT = 16, padB = 36
-  const chartW = W - padL - padR
-  const chartH = H - padT - padB
-
-  const allVals = data.flatMap(d => [d.penjualan, d.pengeluaran, d.profit])
-  const maxVal = Math.max(...allVals, 1)
-  const minVal = Math.min(...allVals, 0)
-  const range = maxVal - minVal || 1
-
-  const xPos = (i: number) =>
-    data.length <= 1 ? padL + chartW / 2 : padL + (i / (data.length - 1)) * chartW
-  const yPos = (v: number) => padT + chartH - ((v - minVal) / range) * chartH
-
-  const makePath = (key: keyof Omit<ChartPoint, 'label'>) =>
-    data.map((d, i) => `${i === 0 ? 'M' : 'L'}${xPos(i).toFixed(1)},${yPos(d[key]).toFixed(1)}`).join(' ')
-
-  const TICKS = 5
-  const yTicks = Array.from({ length: TICKS + 1 }, (_, i) => minVal + (i / TICKS) * range)
-  const xStep = data.length > 20 ? 5 : data.length > 12 ? 2 : 1
-
-  if (loading) return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
-      <span className="spinner" />
-    </div>
-  )
-
-  const hasData = data.some(d => d.penjualan > 0 || d.pengeluaran > 0)
-  if (!hasData) return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--text-muted)', fontSize: 13 }}>
-      Belum ada data untuk periode ini
-    </div>
-  )
-
-  return (
-    <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: '100%' }}
-      onMouseLeave={() => setHoverIdx(null)}>
-
-      {/* Y grid */}
-      {yTicks.map((tick, i) => (
-        <g key={i}>
-          <line
-            x1={padL} y1={yPos(tick).toFixed(1)} x2={W - padR} y2={yPos(tick).toFixed(1)}
-            style={{ stroke: tick === 0 ? 'var(--border)' : 'var(--border-subtle)', strokeWidth: tick === 0 ? 1 : 0.5 }}
-          />
-          <text x={padL - 6} y={(yPos(tick) + 4).toFixed(1)}
-            textAnchor="end" fontSize={9} style={{ fill: 'var(--text-muted)' }}>
-            {fmtShort(tick)}
-          </text>
-        </g>
-      ))}
-
-      {/* X labels */}
-      {data.map((d, i) => i % xStep === 0 && (
-        <text key={i} x={xPos(i).toFixed(1)} y={H - padB + 14}
-          textAnchor="middle" fontSize={9} style={{ fill: 'var(--text-muted)' }}>
-          {d.label}
-        </text>
-      ))}
-
-      {/* Area fills (subtle) */}
-      <path
-        d={`${makePath('penjualan')} L${(padL + chartW).toFixed(1)},${(padT + chartH).toFixed(1)} L${padL},${(padT + chartH).toFixed(1)} Z`}
-        style={{ fill: 'var(--success)', opacity: 0.04 }}
-      />
-      <path
-        d={`${makePath('pengeluaran')} L${(padL + chartW).toFixed(1)},${(padT + chartH).toFixed(1)} L${padL},${(padT + chartH).toFixed(1)} Z`}
-        style={{ fill: 'var(--danger)', opacity: 0.04 }}
-      />
-
-      {/* Lines */}
-      <path d={makePath('penjualan')} style={{ fill: 'none', stroke: 'var(--success)', strokeWidth: 2, strokeLinecap: 'round', strokeLinejoin: 'round' }} />
-      <path d={makePath('pengeluaran')} style={{ fill: 'none', stroke: 'var(--danger)', strokeWidth: 2, strokeLinecap: 'round', strokeLinejoin: 'round' }} />
-      <path d={makePath('profit')} style={{ fill: 'none', stroke: 'var(--accent)', strokeWidth: 2, strokeLinecap: 'round', strokeLinejoin: 'round', strokeDasharray: minVal < 0 ? '5 3' : 'none' }} />
-
-      {/* Hover zones */}
-      {data.map((_, i) => {
-        const zoneW = data.length > 1 ? chartW / data.length : chartW
-        return (
-          <rect key={i}
-            x={(xPos(i) - zoneW / 2).toFixed(1)} y={padT}
-            width={zoneW.toFixed(1)} height={chartH}
-            style={{ fill: 'transparent', cursor: 'crosshair' }}
-            onMouseEnter={() => setHoverIdx(i)}
-          />
-        )
-      })}
-
-      {/* Hover overlay */}
-      {hoverIdx !== null && (() => {
-        const d = data[hoverIdx]
-        const x = xPos(hoverIdx)
-        const ttW = 168, ttH = 96
-        const ttX = x + ttW + 14 > W - padR ? x - ttW - 10 : x + 10
-        const ttY = padT + 8
-        return (
-          <g>
-            <line x1={x.toFixed(1)} y1={padT} x2={x.toFixed(1)} y2={(padT + chartH).toFixed(1)}
-              style={{ stroke: 'var(--border)', strokeWidth: 1, strokeDasharray: '3 3' }} />
-            <circle cx={x.toFixed(1)} cy={yPos(d.penjualan).toFixed(1)} r={4} style={{ fill: 'var(--success)' }} />
-            <circle cx={x.toFixed(1)} cy={yPos(d.pengeluaran).toFixed(1)} r={4} style={{ fill: 'var(--danger)' }} />
-            <circle cx={x.toFixed(1)} cy={yPos(d.profit).toFixed(1)} r={4} style={{ fill: 'var(--accent)' }} />
-            {/* Tooltip box */}
-            <rect x={ttX} y={ttY} width={ttW} height={ttH} rx={7}
-              style={{ fill: 'var(--bg-surface-2)', stroke: 'var(--border)', strokeWidth: 1 }} />
-            <text x={ttX + 10} y={ttY + 17} fontSize={10} fontWeight={700} style={{ fill: 'var(--text-primary)' }}>{d.label}</text>
-            <circle cx={ttX + 12} cy={ttY + 33} r={3} style={{ fill: 'var(--success)' }} />
-            <text x={ttX + 21} y={ttY + 37} fontSize={9} style={{ fill: 'var(--text-secondary)' }}>Penjualan: {fmtShort(d.penjualan)}</text>
-            <circle cx={ttX + 12} cy={ttY + 52} r={3} style={{ fill: 'var(--danger)' }} />
-            <text x={ttX + 21} y={ttY + 56} fontSize={9} style={{ fill: 'var(--text-secondary)' }}>Pengeluaran: {fmtShort(d.pengeluaran)}</text>
-            <circle cx={ttX + 12} cy={ttY + 71} r={3} style={{ fill: 'var(--accent)' }} />
-            <text x={ttX + 21} y={ttY + 75} fontSize={9} style={{ fill: 'var(--text-secondary)' }}>Profit: {fmtShort(d.profit)}</text>
-          </g>
-        )
-      })()}
-    </svg>
-  )
-}
+const keuanganSeries: LineSeries<ChartPoint>[] = [
+  { key: 'penjualan', label: 'Penjualan', color: 'var(--success)' },
+  { key: 'pengeluaran', label: 'Pengeluaran', color: 'var(--danger)' },
+  { key: 'profit', label: 'Profit', color: 'var(--accent)' },
+]
 
 export default function KeuanganPage() {
   const dispatch = useAppDispatch()
@@ -302,7 +181,7 @@ export default function KeuanganPage() {
         {/* Chart header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '14px' }}>
           <div>
-            <h3 style={{ fontFamily: "'Sora', sans-serif", fontSize: '14px', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '2px' }}>
+            <h3 style={{ fontFamily: "'Manrope', sans-serif", fontSize: '14px', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '2px' }}>
               Grafik Keuangan
             </h3>
             <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{periodLabel}</div>
@@ -335,84 +214,93 @@ export default function KeuanganPage() {
 
         {/* SVG chart */}
         <div style={{ height: 260, width: '100%' }}>
-          <LineChart data={chartData} loading={chartLoading} />
+          <LineChart data={chartData} series={keuanganSeries} loading={chartLoading} />
         </div>
       </div>
 
       {error && <div className="alert alert-danger">{error}</div>}
 
-      {/* Transaction list */}
+      {/* Transaction table */}
       {transaksis.length === 0 ? <EmptyState message="Belum ada transaksi bulan ini" icon="keuangan" /> : (
         <div className="animate-fade-up-2 card" style={{ overflow: 'hidden' }}>
-          {transaksis.map((t, i) => (
-            <div key={t.id} className="row-hover" style={{
-              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-              padding: '12px var(--spacing-lg)',
-              borderBottom: i < transaksis.length - 1 ? '1px solid var(--border-subtle)' : 'none',
-              borderLeft: `3px solid ${t.jenis === 'pendapatan' ? 'var(--success)' : 'var(--danger)'}`,
-            }}>
-              <div>
-                <div style={{ fontWeight: 500, fontSize: '13px', marginBottom: '2px' }}>{t.nama}</div>
-                <div style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  {formatTgl(t.tanggal)}{t.kategori ? ` · ${t.kategori}` : ''}
-                  {t.isAutoGenerated && (
-                    <span style={{ padding: '1px 6px', background: 'var(--accent-light)', color: 'var(--accent)', borderRadius: 'var(--radius-full)', fontSize: '10px', fontWeight: 700 }}>Auto</span>
-                  )}
-                </div>
-              </div>
-              <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-                <span style={{ fontWeight: 700, fontSize: '14px', color: t.jenis === 'pendapatan' ? 'var(--success)' : 'var(--danger)', fontFamily: "'Sora', sans-serif" }}>
-                  {t.jenis === 'pendapatan' ? '+' : '−'}{formatRp(t.jumlah)}
-                </span>
-                {!t.isAutoGenerated && (
-                  <button className="btn btn-xs" style={{ background: 'var(--danger-light)', color: 'var(--danger)' }} onClick={() => setConfirm(t)}>Hapus</button>
-                )}
-              </div>
-            </div>
-          ))}
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Nama</TableHead>
+                <TableHead>Kategori</TableHead>
+                <TableHead>Tanggal</TableHead>
+                <TableHead align="right">Jumlah</TableHead>
+                <TableHead align="right">Aksi</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {transaksis.map(t => (
+                <TableRow key={t.id} style={{ borderLeft: `3px solid ${t.jenis === 'pendapatan' ? 'var(--success)' : 'var(--danger)'}` }}>
+                  <TableCell style={{ fontWeight: 500 }}>
+                    {t.nama}
+                    {t.isAutoGenerated && (
+                      <span style={{ marginLeft: 6, padding: '1px 6px', background: 'var(--accent-light)', color: 'var(--accent)', borderRadius: 'var(--radius-full)', fontSize: '10px', fontWeight: 700 }}>Auto</span>
+                    )}
+                  </TableCell>
+                  <TableCell style={{ color: 'var(--text-muted)' }}>{t.kategori || '—'}</TableCell>
+                  <TableCell style={{ color: 'var(--text-muted)' }}>{formatTgl(t.tanggal)}</TableCell>
+                  <TableCell align="right" style={{ fontWeight: 700, color: t.jenis === 'pendapatan' ? 'var(--success)' : 'var(--danger)', fontFamily: "'Manrope', sans-serif" }}>
+                    {t.jenis === 'pendapatan' ? '+' : '−'}{formatRp(t.jumlah)}
+                  </TableCell>
+                  <TableCell align="right">
+                    {!t.isAutoGenerated && (
+                      <button className="btn btn-xs" style={{ background: 'var(--danger-light)', color: 'var(--danger)' }} onClick={() => setConfirm(t)}>Hapus</button>
+                    )}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+            <TableFooter>
+              <TableRow>
+                <TableCell colSpan={3}>Total Bulan Ini</TableCell>
+                <TableCell align="right" colSpan={2} style={{ color: profit >= 0 ? 'var(--success)' : 'var(--danger)', fontFamily: "'Manrope', sans-serif" }}>
+                  {formatRp(profit)}
+                </TableCell>
+              </TableRow>
+            </TableFooter>
+          </Table>
         </div>
       )}
 
       {/* Modal form */}
       {showForm && (
-        <div className="modal-overlay">
-          <div className="modal-box" style={{ width: '420px' }}>
-            <div className="modal-header">
-              <h3>Catat Transaksi Manual</h3>
-              <button className="modal-close" onClick={() => { setShowForm(false); setError('') }}>✕</button>
+        <Modal width={420}>
+          <div className="modal-header">
+            <h3>Catat Transaksi Manual</h3>
+            <button className="modal-close" onClick={() => { setShowForm(false); setError('') }}>✕</button>
+          </div>
+          <div className="modal-body">
+            {error && <div className="alert alert-danger" style={{ marginBottom: 12 }}>{error}</div>}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: 'var(--spacing-lg)' }}>
+              <FormField label="Jenis">
+                <select value={form.jenis} onChange={e => setForm(f => ({ ...f, jenis: e.target.value }))}>
+                  <option value="pendapatan">Pendapatan</option>
+                  <option value="pengeluaran">Pengeluaran</option>
+                </select>
+              </FormField>
+              {([{ label: 'Nama', key: 'nama', required: true }, { label: 'Kategori', key: 'kategori' }] as { label: string; key: string; required?: boolean }[]).map(({ label, key, required }) => (
+                <FormField key={key} label={label} required={required}>
+                  <input value={(form as any)[key]} onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))} />
+                </FormField>
+              ))}
+              <FormField label="Jumlah (Rp)" required>
+                <input type="number" value={form.jumlah} onChange={e => setForm(f => ({ ...f, jumlah: e.target.value }))} />
+              </FormField>
+              <FormField label="Tanggal" required>
+                <input type="date" value={form.tanggal} onChange={e => setForm(f => ({ ...f, tanggal: e.target.value }))} />
+              </FormField>
             </div>
-            <div className="modal-body">
-              {error && <div className="alert alert-danger" style={{ marginBottom: 12 }}>{error}</div>}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: 'var(--spacing-lg)' }}>
-                <div>
-                  <label className="form-label">Jenis</label>
-                  <select value={form.jenis} onChange={e => setForm(f => ({ ...f, jenis: e.target.value }))}>
-                    <option value="pendapatan">Pendapatan</option>
-                    <option value="pengeluaran">Pengeluaran</option>
-                  </select>
-                </div>
-                {([{ label: 'Nama', key: 'nama', required: true }, { label: 'Kategori', key: 'kategori' }] as { label: string; key: string; required?: boolean }[]).map(({ label, key, required }) => (
-                  <div key={key}>
-                    <label className="form-label">{label}{required && <span style={{ color: 'var(--danger)', marginLeft: 2 }}>*</span>}</label>
-                    <input value={(form as any)[key]} onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))} />
-                  </div>
-                ))}
-                <div>
-                  <label className="form-label">Jumlah (Rp) <span style={{ color: 'var(--danger)' }}>*</span></label>
-                  <input type="number" value={form.jumlah} onChange={e => setForm(f => ({ ...f, jumlah: e.target.value }))} />
-                </div>
-                <div>
-                  <label className="form-label">Tanggal <span style={{ color: 'var(--danger)' }}>*</span></label>
-                  <input type="date" value={form.tanggal} onChange={e => setForm(f => ({ ...f, tanggal: e.target.value }))} />
-                </div>
-              </div>
-              <div className="modal-footer">
-                <button className="btn btn-secondary btn-sm" onClick={() => { setShowForm(false); setError('') }}>Batal</button>
-                <button className="btn btn-primary btn-sm" onClick={handleSubmit}>Simpan</button>
-              </div>
+            <div className="modal-footer">
+              <button className="btn btn-secondary btn-sm" onClick={() => { setShowForm(false); setError('') }}>Batal</button>
+              <button className="btn btn-primary btn-sm" onClick={handleSubmit}>Simpan</button>
             </div>
           </div>
-        </div>
+        </Modal>
       )}
 
       {confirm && (

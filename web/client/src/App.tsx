@@ -12,14 +12,9 @@ import Keuangan from './pages/Keuangan'
 import Statistik from './pages/Statistik'
 import Aktivitas from './pages/Aktivitas'
 import Setting from './pages/Setting'
+import { Page, pageTitles } from './lib/navigation'
 
-export type Page = 'dashboard' | 'pesanan' | 'klien' | 'printer' | 'material' | 'keuangan' | 'statistik' | 'aktivitas' | 'setting'
-
-const pageTitles: Record<Page, string> = {
-  dashboard: 'Dashboard', pesanan: 'Manajemen Pesanan', klien: 'Manajemen Klien',
-  printer: 'Manajemen Printer', material: 'Manajemen Material',
-  keuangan: 'Keuangan', statistik: 'Statistik', aktivitas: 'Log Aktivitas', setting: 'Pengaturan',
-}
+export type { Page }
 
 export default function App() {
   const token = useAppSelector((s) => s.auth.token)

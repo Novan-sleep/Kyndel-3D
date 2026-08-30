@@ -1,10 +1,14 @@
 import { useState, useEffect } from 'react'
+import { LazyMotion, domAnimation, m } from 'motion/react'
 import { useAppDispatch, useAppSelector } from '../store/hooks'
 import { fetchMaterials, createMaterial, updateMaterial, restockMaterial, deleteMaterial } from '../store/materialsSlice'
 import { formatRp } from '../lib/api'
 import { Material } from '../types'
 import ConfirmDialog from '../components/ui/ConfirmDialog'
 import EmptyState from '../components/ui/EmptyState'
+import DataRow from '../components/ui/DataRow'
+import FormField from '../components/ui/FormField'
+import Modal from '../components/ui/Modal'
 
 export default function MaterialPage() {
   const dispatch = useAppDispatch()
@@ -103,16 +107,17 @@ export default function MaterialPage() {
           (m.warna ?? '').toLowerCase().includes(q)
         ) : materials
         return filtered.length === 0 ? <EmptyState message={search ? 'Tidak ada hasil' : 'Belum ada material'} icon="material" /> : (
+        <LazyMotion features={domAnimation} strict>
         <div className="animate-fade-up-1" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 'var(--spacing-md)' }}>
-          {filtered.map(m => {
-            const isLow = m.stokMinimum != null && m.stok <= m.stokMinimum
+          {filtered.map(mat => {
+            const isLow = mat.stokMinimum != null && mat.stok <= mat.stokMinimum
             return (
-              <div key={m.id} className="card card-hover" style={{ border: `1px solid ${isLow ? 'var(--warning)' : 'var(--border)'}`, padding: 'var(--spacing-lg)', display: 'flex', flexDirection: 'column' }}>
+              <m.div key={mat.id} className="card" whileHover={{ y: -3 }} transition={{ duration: 0.15, ease: 'easeOut' }} style={{ border: `1px solid ${isLow ? 'var(--warning)' : 'var(--border)'}`, padding: 'var(--spacing-lg)', display: 'flex', flexDirection: 'column' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
                   <div>
-                    <div style={{ fontWeight: 700, marginBottom: '3px', fontSize: '14px' }}>{m.nama}</div>
-                    {(m.tipe || m.warna) && (
-                      <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{[m.tipe, m.warna].filter(Boolean).join(' · ')}</div>
+                    <div style={{ fontWeight: 700, marginBottom: '3px', fontSize: '14px' }}>{mat.nama}</div>
+                    {(mat.tipe || mat.warna) && (
+                      <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{[mat.tipe, mat.warna].filter(Boolean).join(' · ')}</div>
                     )}
                   </div>
                   {isLow && (
@@ -120,139 +125,125 @@ export default function MaterialPage() {
                   )}
                 </div>
 
-                <div style={{ fontSize: '12px', display: 'flex', flexDirection: 'column', gap: '6px', flex: 1 }}>
-                  {[
-                    ['Stok', <span style={{ fontWeight: 700, color: isLow ? 'var(--warning)' : 'inherit' }}>{m.stok} kg{m.stokMinimum != null ? <span style={{ fontWeight: 400, color: 'var(--text-muted)' }}> / min {m.stokMinimum}</span> : ''}</span>],
-                    ['Harga Beli', `${formatRp(m.hargaBeliPerGram)}/g`],
-                    ['Harga Jual', `${formatRp(m.hargaJualPerGram)}/g`],
-                    ['Margin', <span style={{ color: 'var(--success)', fontWeight: 700 }}>{formatRp(m.marginPerGram)}/g</span>],
-                  ].map(([label, val], i, arr) => (
-                    <div key={String(label)} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '5px 0', borderBottom: i < arr.length - 1 ? '1px solid var(--border-subtle)' : 'none' }}>
-                      <span style={{ color: 'var(--text-muted)' }}>{label}</span>
-                      <span>{val}</span>
-                    </div>
-                  ))}
+                <div style={{ fontSize: '12px', display: 'flex', flexDirection: 'column', flex: 1 }}>
+                  <DataRow label="Stok" value={<span style={{ fontWeight: 700, color: isLow ? 'var(--warning)' : 'inherit' }}>{mat.stok} kg{mat.stokMinimum != null ? <span style={{ fontWeight: 400, color: 'var(--text-muted)' }}> / min {mat.stokMinimum}</span> : ''}</span>} />
+                  <DataRow label="Harga Beli" value={`${formatRp(mat.hargaBeliPerGram)}/g`} />
+                  <DataRow label="Harga Jual" value={`${formatRp(mat.hargaJualPerGram)}/g`} />
+                  <DataRow label="Margin" value={<span style={{ color: 'var(--success)', fontWeight: 700 }}>{formatRp(mat.marginPerGram)}/g</span>} last />
                 </div>
 
                 <div style={{ display: 'flex', gap: '8px', marginTop: '14px' }}>
-                  <button className="btn btn-secondary btn-sm" style={{ flex: 1 }} onClick={() => openEdit(m)}>Edit</button>
+                  <button className="btn btn-secondary btn-sm" style={{ flex: 1 }} onClick={() => openEdit(mat)}>Edit</button>
                   <button
                     className="btn btn-sm"
                     style={{ background: 'var(--success-light)', color: 'var(--success)', fontWeight: 600 }}
-                    onClick={() => openRestock(m)}
+                    onClick={() => openRestock(mat)}
                   >+ Restock</button>
-                  <button className="btn btn-sm" style={{ background: 'var(--danger-light)', color: 'var(--danger)' }} onClick={() => setConfirm(m)}>Hapus</button>
+                  <button className="btn btn-sm" style={{ background: 'var(--danger-light)', color: 'var(--danger)' }} onClick={() => setConfirm(mat)}>Hapus</button>
                 </div>
-              </div>
+              </m.div>
             )
           })}
         </div>
+        </LazyMotion>
         )
       })()}
 
       {showForm && (
-        <div className="modal-overlay">
-          <div className="modal-box" style={{ width: '440px' }}>
-            <div className="modal-header">
-              <h3>{editItem ? 'Edit Material' : 'Tambah Material'}</h3>
-              <button className="modal-close" onClick={() => { setShowForm(false); setError('') }}>✕</button>
-            </div>
-            <div className="modal-body">
-              {error && <div className="alert alert-danger" style={{ marginBottom: 12 }}>{error}</div>}
-              <div className="form-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: 'var(--spacing-lg)' }}>
-                <div style={{ gridColumn: '1/-1' }}>
-                  <label className="form-label">Nama <span style={{ color: 'var(--danger)' }}>*</span></label>
+        <Modal width={440}>
+          <div className="modal-header">
+            <h3>{editItem ? 'Edit Material' : 'Tambah Material'}</h3>
+            <button className="modal-close" onClick={() => { setShowForm(false); setError('') }}>✕</button>
+          </div>
+          <div className="modal-body">
+            {error && <div className="alert alert-danger" style={{ marginBottom: 12 }}>{error}</div>}
+            <div className="form-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: 'var(--spacing-lg)' }}>
+              <div style={{ gridColumn: '1/-1' }}>
+                <FormField label="Nama" required>
                   <input value={form.nama} onChange={e => setForm(f => ({ ...f, nama: e.target.value }))} />
-                </div>
-                {[
-                  { label: 'Tipe', key: 'tipe', placeholder: 'PLA, ABS...' },
-                  { label: 'Warna', key: 'warna' },
-                ].map(({ label, key, placeholder }) => (
-                  <div key={key}>
-                    <label className="form-label">{label}</label>
-                    <input value={(form as any)[key]} onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))} placeholder={placeholder} />
-                  </div>
-                ))}
-                {[
-                  { label: 'Stok (kg)', key: 'stok', required: true },
-                  { label: 'Stok Min (kg)', key: 'stokMinimum' },
-                  { label: 'Harga Beli/gram', key: 'hargaBeliPerGram', required: true },
-                  { label: 'Harga Jual/gram', key: 'hargaJualPerGram', required: true },
-                ].map(({ label, key, required }) => (
-                  <div key={key}>
-                    <label className="form-label">{label}{required && <span style={{ color: 'var(--danger)', marginLeft: 2 }}>*</span>}</label>
-                    <input type="number" step="0.01" value={(form as any)[key]} onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))} />
-                  </div>
-                ))}
+                </FormField>
               </div>
-              <div className="modal-footer">
-                <button className="btn btn-secondary btn-sm" onClick={() => { setShowForm(false); setError('') }}>Batal</button>
-                <button className="btn btn-primary btn-sm" onClick={handleSubmit}>Simpan</button>
-              </div>
+              {[
+                { label: 'Tipe', key: 'tipe', placeholder: 'PLA, ABS...' },
+                { label: 'Warna', key: 'warna' },
+              ].map(({ label, key, placeholder }) => (
+                <FormField key={key} label={label}>
+                  <input value={(form as any)[key]} onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))} placeholder={placeholder} />
+                </FormField>
+              ))}
+              {[
+                { label: 'Stok (kg)', key: 'stok', required: true },
+                { label: 'Stok Min (kg)', key: 'stokMinimum' },
+                { label: 'Harga Beli/gram', key: 'hargaBeliPerGram', required: true },
+                { label: 'Harga Jual/gram', key: 'hargaJualPerGram', required: true },
+              ].map(({ label, key, required }) => (
+                <FormField key={key} label={label} required={required}>
+                  <input type="number" step="0.01" value={(form as any)[key]} onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))} />
+                </FormField>
+              ))}
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-secondary btn-sm" onClick={() => { setShowForm(false); setError('') }}>Batal</button>
+              <button className="btn btn-primary btn-sm" onClick={handleSubmit}>Simpan</button>
             </div>
           </div>
-        </div>
+        </Modal>
       )}
 
       {restockItem && (
-        <div className="modal-overlay">
-          <div className="modal-box" style={{ width: '420px' }}>
-            <div className="modal-header">
-              <h3>Restock — {restockItem.nama}</h3>
-              <button className="modal-close" onClick={() => setRestockItem(null)}>✕</button>
+        <Modal width={420}>
+          <div className="modal-header">
+            <h3>Restock — {restockItem.nama}</h3>
+            <button className="modal-close" onClick={() => setRestockItem(null)}>✕</button>
+          </div>
+          <div className="modal-body">
+            {restockError && <div className="alert alert-danger" style={{ marginBottom: 12 }}>{restockError}</div>}
+            <div style={{ marginBottom: '12px', padding: '8px 12px', background: 'var(--bg-surface-2)', borderRadius: 'var(--radius-md)', fontSize: '12px', color: 'var(--text-secondary)' }}>
+              Stok saat ini: <strong>{restockItem.stok} kg</strong>
             </div>
-            <div className="modal-body">
-              {restockError && <div className="alert alert-danger" style={{ marginBottom: 12 }}>{restockError}</div>}
-              <div style={{ marginBottom: '12px', padding: '8px 12px', background: 'var(--bg-surface-2)', borderRadius: 'var(--radius-md)', fontSize: '12px', color: 'var(--text-secondary)' }}>
-                Stok saat ini: <strong>{restockItem.stok} kg</strong>
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: 'var(--spacing-lg)' }}>
-                <div>
-                  <label className="form-label">Jumlah Tambah (kg) <span style={{ color: 'var(--danger)' }}>*</span></label>
-                  <input
-                    type="number" step="0.1" min="0.001"
-                    value={restockForm.jumlahKg}
-                    onChange={e => setRestockForm(f => ({ ...f, jumlahKg: e.target.value }))}
-                    placeholder="Contoh: 1.5"
-                    autoFocus
-                  />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: 'var(--spacing-lg)' }}>
+              <FormField label="Jumlah Tambah (kg)" required>
+                <input
+                  type="number" step="0.1" min="0.001"
+                  value={restockForm.jumlahKg}
+                  onChange={e => setRestockForm(f => ({ ...f, jumlahKg: e.target.value }))}
+                  placeholder="Contoh: 1.5"
+                  autoFocus
+                />
+              </FormField>
+              <FormField label="Harga Beli / gram (Rp)" required>
+                <input
+                  type="number" step="1"
+                  value={restockForm.hargaBeliPerGram}
+                  onChange={e => setRestockForm(f => ({ ...f, hargaBeliPerGram: e.target.value }))}
+                  placeholder="Harga beli per gram"
+                />
+                <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>
+                  Jika harga berubah, nilai ini akan diperbarui di data material.
                 </div>
-                <div>
-                  <label className="form-label">Harga Beli / gram (Rp) <span style={{ color: 'var(--danger)' }}>*</span></label>
-                  <input
-                    type="number" step="1"
-                    value={restockForm.hargaBeliPerGram}
-                    onChange={e => setRestockForm(f => ({ ...f, hargaBeliPerGram: e.target.value }))}
-                    placeholder="Harga beli per gram"
-                  />
-                  <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>
-                    Jika harga berubah, nilai ini akan diperbarui di data material.
+              </FormField>
+              {restockForm.jumlahKg && restockForm.hargaBeliPerGram && +restockForm.jumlahKg > 0 && +restockForm.hargaBeliPerGram > 0 && (
+                <div style={{ padding: '10px 14px', background: 'var(--success-light)', borderRadius: 'var(--radius-md)', borderLeft: '3px solid var(--success)' }}>
+                  <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '2px' }}>Total biaya yang akan dicatat sebagai pengeluaran</div>
+                  <div style={{ fontSize: '16px', fontWeight: 700, color: 'var(--success)', fontFamily: "'Manrope', sans-serif" }}>
+                    {formatRp(Math.round(+restockForm.jumlahKg * 1000 * +restockForm.hargaBeliPerGram))}
                   </div>
                 </div>
-                {restockForm.jumlahKg && restockForm.hargaBeliPerGram && +restockForm.jumlahKg > 0 && +restockForm.hargaBeliPerGram > 0 && (
-                  <div style={{ padding: '10px 14px', background: 'var(--success-light)', borderRadius: 'var(--radius-md)', borderLeft: '3px solid var(--success)' }}>
-                    <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '2px' }}>Total biaya yang akan dicatat sebagai pengeluaran</div>
-                    <div style={{ fontSize: '16px', fontWeight: 700, color: 'var(--success)', fontFamily: "'Sora', sans-serif" }}>
-                      {formatRp(Math.round(+restockForm.jumlahKg * 1000 * +restockForm.hargaBeliPerGram))}
-                    </div>
-                  </div>
-                )}
-                <div>
-                  <label className="form-label">Catatan</label>
-                  <input
-                    value={restockForm.catatan}
-                    onChange={e => setRestockForm(f => ({ ...f, catatan: e.target.value }))}
-                    placeholder="Opsional — nama supplier, nomor nota, dll."
-                  />
-                </div>
-              </div>
-              <div className="modal-footer">
-                <button className="btn btn-secondary btn-sm" onClick={() => setRestockItem(null)}>Batal</button>
-                <button className="btn btn-primary btn-sm" onClick={handleRestock}>Konfirmasi Restock</button>
-              </div>
+              )}
+              <FormField label="Catatan">
+                <input
+                  value={restockForm.catatan}
+                  onChange={e => setRestockForm(f => ({ ...f, catatan: e.target.value }))}
+                  placeholder="Opsional — nama supplier, nomor nota, dll."
+                />
+              </FormField>
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-secondary btn-sm" onClick={() => setRestockItem(null)}>Batal</button>
+              <button className="btn btn-primary btn-sm" onClick={handleRestock}>Konfirmasi Restock</button>
             </div>
           </div>
-        </div>
+        </Modal>
       )}
 
       {confirm && <ConfirmDialog title="Hapus Material" message={`Hapus material "${confirm.nama}"?`} onConfirm={async () => { await dispatch(deleteMaterial(confirm.id)); setConfirm(null) }} onCancel={() => setConfirm(null)} confirmLabel="Hapus" danger />}
