@@ -467,22 +467,22 @@ export default function PesananPage() {
                         </div>
                       )}
                     </TableCell>
-                    <TableCell>
+                    <TableCell data-label="Printer">
                       <span style={{ background: 'var(--bg-surface-2)', border: '1px solid var(--border)', borderRadius: '5px', padding: '1px 7px', fontSize: '11px', whiteSpace: 'nowrap' }}>{p.printerNama}</span>
                     </TableCell>
-                    <TableCell>
+                    <TableCell data-label="Material">
                       {p.multiColorData
                         ? <span style={{ background: 'var(--accent-light)', color: 'var(--accent)', borderRadius: '5px', padding: '1px 7px', fontSize: '11px', fontWeight: 600, whiteSpace: 'nowrap' }}>Multi Color ({p.multiColorData.length})</span>
                         : <span style={{ background: 'var(--teal-light)', color: 'var(--teal)', borderRadius: '5px', padding: '1px 7px', fontSize: '11px', fontWeight: 600, whiteSpace: 'nowrap' }}>{p.materialNama}</span>
                       }
                     </TableCell>
-                    <TableCell align="right" style={{ color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{(p.beratMaterial * 1000).toFixed(0)} g</TableCell>
-                    <TableCell align="right" style={{ fontWeight: 700, fontSize: '13px', color: 'var(--text-primary)', whiteSpace: 'nowrap' }}>
+                    <TableCell align="right" data-label="Berat" style={{ color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{(p.beratMaterial * 1000).toFixed(0)} g</TableCell>
+                    <TableCell align="right" data-label="Harga" style={{ fontWeight: 700, fontSize: '13px', color: 'var(--text-primary)', whiteSpace: 'nowrap' }}>
                       {p.diskonTipe && <span style={{ fontSize: '11px', color: 'var(--text-muted)', textDecoration: 'line-through', marginRight: '4px' }}>{formatRp(p.nilaiJual)}</span>}
                       {formatRp(p.hargaFinal)}
                     </TableCell>
-                    <TableCell><StatusBadge status={p.status} /></TableCell>
-                    <TableCell align="right" onClick={e => e.stopPropagation()}>
+                    <TableCell data-label="Status"><StatusBadge status={p.status} /></TableCell>
+                    <TableCell align="right" data-label="Aksi" onClick={e => e.stopPropagation()}>
                       <div style={{ display: 'flex', gap: '6px', alignItems: 'center', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
                         {!invoiceMode && (
                           <button className="btn btn-secondary btn-sm" onClick={() => openEdit(p)}>Edit</button>

@@ -5,6 +5,7 @@ import {
   AreaChart, Area,
 } from 'recharts'
 import { api, formatRp } from '../lib/api'
+import { pctChange, TrendChip, StatTile } from '../lib/trend'
 import { Pesanan, Klien, Printer } from '../types'
 
 // ── Palette & constants ───────────────────────────────────────────────────────
@@ -20,6 +21,10 @@ function fmtShort(n: number): string {
   if (a >= 1_000_000)     return `${(n / 1_000_000).toFixed(1)}jt`
   if (a >= 1_000)         return `${(n / 1_000).toFixed(0)}rb`
   return String(Math.round(n))
+}
+
+function monthKey(iso?: string): string {
+  return (iso ?? '').substring(0, 7)
 }
 
 // ── Tooltip ───────────────────────────────────────────────────────────────────
@@ -51,45 +56,6 @@ function Tip({ active, payload, label, fmt }: any) {
           </span>
         </div>
       ))}
-    </div>
-  )
-}
-
-// ── KPI Card ──────────────────────────────────────────────────────────────────
-
-function KpiCard({ label, value, sub, icon, color, grad }: {
-  label: string; value: string; sub?: string
-  icon: React.ReactNode; color: string; grad: string
-}) {
-  return (
-    <div style={{
-      background: 'var(--bg-surface)',
-      border: '1px solid var(--border)',
-      borderRadius: 'var(--radius-lg)',
-      padding: '20px',
-      position: 'relative',
-      overflow: 'hidden',
-      boxShadow: '0 4px 24px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.04)',
-    }}>
-      {/* gradient top strip */}
-      <div style={{ position:'absolute', top:0, left:0, right:0, height:2, background:grad }} />
-      {/* ambient glow */}
-      <div style={{ position:'absolute', top:-30, right:-30, width:100, height:100, borderRadius:'50%', background:color, opacity:0.07, filter:'blur(28px)', pointerEvents:'none' }} />
-
-      <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', gap:12 }}>
-        <div style={{ minWidth:0, flex:1 }}>
-          <div style={{ fontSize:11, color:'var(--text-muted)', fontWeight:500, textTransform:'uppercase', letterSpacing:'0.05em', marginBottom:9 }}>{label}</div>
-          <div style={{ fontSize:23, fontWeight:800, fontFamily:"'Sora',sans-serif", color:'var(--text-primary)', lineHeight:1, letterSpacing:'-0.04em' }}>{value}</div>
-          {sub && <div style={{ fontSize:11, color:'var(--text-muted)', marginTop:6 }}>{sub}</div>}
-        </div>
-        <div style={{
-          width:44, height:44, borderRadius:13, background:grad, flexShrink:0,
-          display:'flex', alignItems:'center', justifyContent:'center',
-          boxShadow:`0 4px 18px ${color}55`,
-        }}>
-          {icon}
-        </div>
-      </div>
     </div>
   )
 }
@@ -157,13 +123,12 @@ export default function StatistikPage() {
 
   const selesai      = useMemo(() => pesanans.filter(p => p.status === 'Selesai'), [pesanans])
   const totalRevenue = useMemo(() => selesai.reduce((a, p) => a + p.hargaFinal, 0), [selesai])
-  const rataRata     = selesai.length > 0 ? Math.round(totalRevenue / selesai.length) : 0
 
-  // Monthly revenue trend (last 8 months)
-  const monthlyData = useMemo(() => {
+  // Monthly revenue/pesanan buckets (semua bulan, terurut)
+  const monthlyAll = useMemo(() => {
     const map: Record<string, { label: string; revenue: number; pesanan: number }> = {}
     for (const p of selesai) {
-      const raw = (p.createdAt ?? '').substring(0, 7)
+      const raw = monthKey(p.createdAt)
       if (raw.length < 7) continue
       if (!map[raw]) {
         const [y, m] = raw.split('-')
@@ -172,8 +137,27 @@ export default function StatistikPage() {
       map[raw].revenue += p.hargaFinal
       map[raw].pesanan++
     }
-    return Object.entries(map).sort(([a], [b]) => a.localeCompare(b)).slice(-8).map(([, v]) => v)
+    return Object.entries(map).sort(([a], [b]) => a.localeCompare(b)).map(([, v]) => v)
   }, [selesai])
+
+  const monthlyData = useMemo(() => monthlyAll.slice(-8), [monthlyAll])
+  const thisMonth = monthlyAll[monthlyAll.length - 1]
+  const lastMonth = monthlyAll[monthlyAll.length - 2]
+  const thisAvg = thisMonth && thisMonth.pesanan > 0 ? thisMonth.revenue / thisMonth.pesanan : 0
+  const lastAvg = lastMonth && lastMonth.pesanan > 0 ? lastMonth.revenue / lastMonth.pesanan : 0
+
+  // Klien baru per bulan
+  const klienMonthlyAll = useMemo(() => {
+    const map: Record<string, number> = {}
+    for (const k of kliens) {
+      const raw = monthKey(k.createdAt)
+      if (raw.length < 7) continue
+      map[raw] = (map[raw] ?? 0) + 1
+    }
+    return Object.entries(map).sort(([a], [b]) => a.localeCompare(b)).map(([, v]) => v)
+  }, [kliens])
+  const thisKlienBaru = klienMonthlyAll[klienMonthlyAll.length - 1] ?? 0
+  const lastKlienBaru = klienMonthlyAll[klienMonthlyAll.length - 2] ?? 0
 
   // Top klien
   const klienData = useMemo(() =>
@@ -211,17 +195,20 @@ export default function StatistikPage() {
       .sort((a, b) => b.jam - a.jam)
   }, [printers, selesai])
 
-  // Status distribution
-  const statusData = useMemo(() => {
+  // Status distribution + tingkat penyelesaian
+  const statusCounts = useMemo(() => {
     const c = { Antrian: 0, Printing: 0, Selesai: 0, Dibatalkan: 0 }
     for (const p of pesanans) c[p.status as keyof typeof c]++
-    return [
-      { name: 'Antrian',    value: c.Antrian,    color: '#f59e0b' },
-      { name: 'Printing',   value: c.Printing,   color: '#6366f1' },
-      { name: 'Selesai',    value: c.Selesai,    color: '#22c55e' },
-      { name: 'Dibatalkan', value: c.Dibatalkan, color: '#6b7280' },
-    ].filter(d => d.value > 0)
+    return c
   }, [pesanans])
+  const statusData = useMemo(() => [
+    { name: 'Antrian',    value: statusCounts.Antrian,    color: '#f59e0b' },
+    { name: 'Printing',   value: statusCounts.Printing,   color: '#6366f1' },
+    { name: 'Selesai',    value: statusCounts.Selesai,    color: '#22c55e' },
+    { name: 'Dibatalkan', value: statusCounts.Dibatalkan, color: '#6b7280' },
+  ].filter(d => d.value > 0), [statusCounts])
+  const resolvedCount = statusCounts.Selesai + statusCounts.Dibatalkan
+  const completionRate = resolvedCount > 0 ? (statusCounts.Selesai / resolvedCount) * 100 : 0
 
   if (loading) return <div className="page-loading"><div className="spinner" /><span>Memuat statistik...</span></div>
 
@@ -248,35 +235,22 @@ export default function StatistikPage() {
         </defs>
       </svg>
 
-      {/* ── KPI Cards ─────────────────────────────────────────────────── */}
-      <div className="animate-fade-up" style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:16 }}>
+      {/* ── Hero: Revenue chart + Goal/Insight column ────────────────────── */}
+      <div className="animate-fade-up" style={{ display:'grid', gridTemplateColumns:'2fr 1fr', gap:16, alignItems:'stretch' }}>
 
-        <KpiCard
-          label="Pesanan Selesai" value={String(selesai.length)} sub={`dari ${pesanans.length} total order`}
-          color="#22c55e" grad="linear-gradient(135deg,#22c55e,#16a34a)"
-          icon={<svg width="22" height="22" viewBox="0 0 16 16" fill="none" stroke="#fff" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M13 4L6.5 11 3 7.5"/></svg>}
-        />
-        <KpiCard
-          label="Total Klien" value={String(kliens.length)} sub="klien terdaftar"
-          color="#6366f1" grad="linear-gradient(135deg,#6366f1,#4f52cc)"
-          icon={<svg width="22" height="22" viewBox="0 0 16 16" fill="none" stroke="#fff" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><circle cx="6" cy="5.5" r="2.5"/><path d="M1 14c0-2.8 2.2-5 5-5 1.2 0 2.3.4 3.2 1"/><circle cx="12" cy="5" r="2"/><path d="M10.5 12.5c.6-1.6 2.4-1.8 4-.5"/></svg>}
-        />
-        <KpiCard
-          label="Total Revenue" value={formatRp(totalRevenue)} sub="dari order selesai"
-          color="#4fd1c5" grad="linear-gradient(135deg,#4fd1c5,#38b2ac)"
-          icon={<svg width="22" height="22" viewBox="0 0 16 16" fill="none" stroke="#fff" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><circle cx="8" cy="8" r="6.5"/><path d="M8 4.5v1M8 10.5v1"/><path d="M5.8 6.5c0-.8.9-1.5 2.2-1.5s2.2.7 2.2 1.5-1 1-2.2 1.3c-1.3.3-2.2.8-2.2 1.7 0 .8 1 1.5 2.2 1.5s2.2-.7 2.2-1.5"/></svg>}
-        />
-        <KpiCard
-          label="Rata-rata / Order" value={formatRp(rataRata)} sub="nilai rata-rata"
-          color="#a78bfa" grad="linear-gradient(135deg,#a78bfa,#7c3aed)"
-          icon={<svg width="22" height="22" viewBox="0 0 16 16" fill="none" stroke="#fff" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><polyline points="1.5,12 4.5,8 7.5,10 12,4.5"/><polyline points="10,4.5 12,4.5 12,6.5"/></svg>}
-        />
-      </div>
+        <div style={{
+          background: 'var(--bg-surface)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border)',
+          overflow: 'hidden', boxShadow: '0 4px 24px rgba(0,0,0,0.2)', padding: '20px 22px',
+        }}>
+          <div style={{ fontSize:12, color:'var(--text-muted)', fontWeight:600, marginBottom:6 }}>Revenue Bulan Ini</div>
+          <div style={{ display:'flex', alignItems:'baseline', gap:12, flexWrap:'wrap', marginBottom:16 }}>
+            <span style={{ fontFamily:"'Sora',sans-serif", fontSize:30, fontWeight:800, color:'var(--text-primary)', letterSpacing:'-0.03em' }}>
+              {formatRp(thisMonth?.revenue ?? 0)}
+            </span>
+            <TrendChip change={pctChange(thisMonth?.revenue ?? 0, lastMonth?.revenue ?? 0)} />
+            <span style={{ fontSize:12, color:'var(--text-muted)' }}>vs bulan lalu</span>
+          </div>
 
-      {/* ── Revenue Trend + Status Donut ──────────────────────────────── */}
-      <div className="animate-fade-up-1" style={{ display:'grid', gridTemplateColumns:'3fr 2fr', gap:16 }}>
-
-        <ChartCard title="Tren Revenue Bulanan" badge={monthlyData.length > 0 ? `${monthlyData.length} bulan` : undefined} accent="#6366f1">
           {monthlyData.length < 2 ? <EmptyChart h={220} /> : (
             <ResponsiveContainer width="100%" height={220}>
               <AreaChart data={monthlyData} margin={{ top:10, right:10, left:0, bottom:0 }}>
@@ -293,17 +267,85 @@ export default function StatistikPage() {
               </AreaChart>
             </ResponsiveContainer>
           )}
-        </ChartCard>
+        </div>
 
+        <div style={{ display:'flex', flexDirection:'column', gap:16, height:'100%' }}>
+
+          {/* Goal card — tingkat penyelesaian pesanan */}
+          <div style={{
+            flex:1, borderRadius:'var(--radius-lg)', padding:'20px 22px',
+            background:'linear-gradient(160deg,var(--bg-surface-3),var(--bg-surface))',
+            border:'1px solid var(--border)', boxShadow:'0 4px 24px rgba(0,0,0,0.25)',
+            display:'flex', flexDirection:'column', justifyContent:'space-between',
+          }}>
+            <div>
+              <div style={{ fontSize:10, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.15em', color:'var(--text-muted)', marginBottom:8 }}>
+                Kualitas Pengerjaan
+              </div>
+              <div style={{ fontSize:15, fontFamily:"'Sora',sans-serif", fontWeight:700, color:'var(--text-primary)' }}>Tingkat Penyelesaian</div>
+            </div>
+            <div style={{ marginTop:18 }}>
+              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'baseline', marginBottom:8 }}>
+                <span style={{ fontFamily:"'Sora',sans-serif", fontSize:26, fontWeight:800, color:'var(--text-primary)', letterSpacing:'-0.03em' }}>
+                  {resolvedCount > 0 ? `${completionRate.toFixed(0)}%` : '–'}
+                </span>
+                <span style={{ fontSize:11, color:'var(--text-muted)' }}>{statusCounts.Selesai} dari {resolvedCount} order</span>
+              </div>
+              <div style={{ width:'100%', height:6, background:'var(--bg-surface-2)', borderRadius:'var(--radius-full)', overflow:'hidden' }}>
+                <div style={{ height:'100%', width:`${completionRate}%`, background:'linear-gradient(90deg,var(--success),var(--teal))', borderRadius:'var(--radius-full)' }} />
+              </div>
+            </div>
+          </div>
+
+          {/* Insight card — pertumbuhan klien */}
+          <div style={{
+            flex:1, borderRadius:'var(--radius-lg)', padding:'18px 22px', background:'var(--bg-surface)',
+            border:'1px solid var(--border)', boxShadow:'0 4px 24px rgba(0,0,0,0.2)',
+            display:'flex', flexDirection:'column', justifyContent:'center', gap:10,
+          }}>
+            <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+              <div style={{ width:32, height:32, borderRadius:10, background:'var(--accent-light)', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="var(--accent)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="6" cy="5.5" r="2.5"/><path d="M1 14c0-2.8 2.2-5 5-5 1.2 0 2.3.4 3.2 1"/><circle cx="12" cy="5" r="2"/><path d="M10.5 12.5c.6-1.6 2.4-1.8 4-.5"/>
+                </svg>
+              </div>
+              <span style={{ fontSize:14, fontFamily:"'Sora',sans-serif", fontWeight:700, color:'var(--text-primary)' }}>Pertumbuhan Klien</span>
+            </div>
+            <p style={{ fontSize:12.5, color:'var(--text-secondary)', lineHeight:1.5 }}>
+              {thisKlienBaru > 0 ? (
+                <>Klien baru bulan ini <span style={{ color:'var(--text-primary)', fontWeight:700 }}>{thisKlienBaru} klien</span></>
+              ) : (
+                <>Belum ada klien baru bulan ini</>
+              )}
+              {' '}
+              <TrendChip change={pctChange(thisKlienBaru, lastKlienBaru)} />
+              {' '}dibanding bulan lalu.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* ── KPI Row (bulan ini vs bulan lalu) ─────────────────────────────── */}
+      <div className="animate-fade-up-1" style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:16 }}>
+        <StatTile label="Pesanan Selesai Bulan Ini" value={String(thisMonth?.pesanan ?? 0)} change={pctChange(thisMonth?.pesanan ?? 0, lastMonth?.pesanan ?? 0)} />
+        <StatTile label="Revenue Bulan Ini" value={formatRp(thisMonth?.revenue ?? 0)} change={pctChange(thisMonth?.revenue ?? 0, lastMonth?.revenue ?? 0)} />
+        <StatTile label="Rata-rata Order Bulan Ini" value={formatRp(Math.round(thisAvg))} change={pctChange(thisAvg, lastAvg)} />
+        <StatTile label="Total Revenue (Semua Waktu)" value={formatRp(totalRevenue)} change={null} />
+      </div>
+
+      {/* ── Status · Top Klien · Material · Printer ───────────────────────── */}
+      <div className="animate-fade-up-2" style={{ display:'grid', gridTemplateColumns:'1fr 1.6fr 1fr 1fr', gap:16 }}>
+
+        {/* Status Pesanan */}
         <ChartCard title="Status Pesanan" badge={`${pesanans.length} total`} accent="#f59e0b">
           {statusData.length === 0 ? <EmptyChart h={220} /> : (
             <>
               <div style={{ position:'relative' }}>
-                <ResponsiveContainer width="100%" height={186}>
+                <ResponsiveContainer width="100%" height={140}>
                   <PieChart>
                     <Pie
                       data={statusData} cx="50%" cy="50%"
-                      innerRadius="50%" outerRadius="74%"
+                      innerRadius="52%" outerRadius="78%"
                       paddingAngle={4} dataKey="value"
                       startAngle={90} endAngle={-270}
                       labelLine={false}
@@ -315,33 +357,27 @@ export default function StatistikPage() {
                     <Tooltip content={<Tip/>}/>
                   </PieChart>
                 </ResponsiveContainer>
-                {/* Center label overlay */}
                 <div style={{ position:'absolute', top:'50%', left:'50%', transform:'translate(-50%,-50%)', textAlign:'center', pointerEvents:'none' }}>
-                  <div style={{ fontSize:28, fontWeight:800, fontFamily:"'Sora',sans-serif", lineHeight:1, color:'var(--text-primary)' }}>{pesanans.length}</div>
-                  <div style={{ fontSize:10, color:'var(--text-muted)', marginTop:3, textTransform:'uppercase', letterSpacing:'0.06em' }}>Total</div>
+                  <div style={{ fontSize:22, fontWeight:800, fontFamily:"'Sora',sans-serif", lineHeight:1, color:'var(--text-primary)' }}>{pesanans.length}</div>
+                  <div style={{ fontSize:9, color:'var(--text-muted)', marginTop:2, textTransform:'uppercase', letterSpacing:'0.06em' }}>Total</div>
                 </div>
               </div>
-              {/* Custom legend */}
-              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'6px 10px', marginTop:10 }}>
+              <div style={{ display:'flex', flexDirection:'column', gap:6, marginTop:10 }}>
                 {statusData.map(d => (
                   <div key={d.name} style={{
-                    display:'flex', alignItems:'center', gap:8, padding:'6px 10px',
+                    display:'flex', alignItems:'center', gap:8, padding:'5px 10px',
                     borderRadius:9, background:'var(--bg-surface-2)',
                     border:'1px solid var(--border)',
                   }}>
-                    <span style={{ width:8, height:8, borderRadius:2, background:d.color, flexShrink:0, boxShadow:`0 0 6px ${d.color}90` }}/>
+                    <span style={{ width:7, height:7, borderRadius:2, background:d.color, flexShrink:0, boxShadow:`0 0 6px ${d.color}90` }}/>
                     <span style={{ fontSize:11, color:'var(--text-muted)', flex:1 }}>{d.name}</span>
-                    <span style={{ fontSize:13, fontWeight:800, color:'var(--text-primary)', fontFamily:"'Sora',sans-serif" }}>{d.value}</span>
+                    <span style={{ fontSize:12, fontWeight:800, color:'var(--text-primary)', fontFamily:"'Sora',sans-serif" }}>{d.value}</span>
                   </div>
                 ))}
               </div>
             </>
           )}
         </ChartCard>
-      </div>
-
-      {/* ── Bottom Row: Top Klien · Material · Printer ────────────────── */}
-      <div className="animate-fade-up-2" style={{ display:'grid', gridTemplateColumns:'2fr 1fr 1fr', gap:16 }}>
 
         {/* Top Klien */}
         <ChartCard title="Top Klien by Revenue" badge={klienData.length > 0 ? `${klienData.length} klien` : undefined} accent="#4fd1c5">

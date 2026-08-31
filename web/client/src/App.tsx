@@ -9,7 +9,6 @@ import Klien from './pages/Klien'
 import Printers from './pages/Printers'
 import Materials from './pages/Materials'
 import Keuangan from './pages/Keuangan'
-import Statistik from './pages/Statistik'
 import Aktivitas from './pages/Aktivitas'
 import Setting from './pages/Setting'
 import { Page, pageTitles } from './lib/navigation'
@@ -46,7 +45,6 @@ export default function App() {
       case 'printer':   return <Printers />
       case 'material':  return <Materials />
       case 'keuangan':  return <Keuangan />
-      case 'statistik': return <Statistik />
       case 'aktivitas': return <Aktivitas />
       case 'setting':   return <Setting />
     }

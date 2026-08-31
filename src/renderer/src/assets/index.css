@@ -192,3 +192,11 @@ select option { background:var(--bg-surface-2); color:var(--text-primary); }
 
 .page-header { display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:var(--spacing-lg);animation:fadeUp 0.3s ease both; }
 .page-title { font-family:'Sora',sans-serif;font-size:22px;font-weight:800;color:var(--text-primary);letter-spacing:-0.03em;line-height:1.15; }
+
+.stat-tile { background:var(--bg-surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:16px 18px;transition:background 0.2s ease,border-color 0.2s ease,transform 0.2s ease; }
+.stat-tile:hover { transform:translateY(-2px); }
+.stat-tile-up:hover { border-color:var(--success);background:var(--success-light); }
+.stat-tile-down:hover { border-color:var(--danger);background:var(--danger-light); }
+.stat-chip { display:inline-flex;align-items:center;gap:3px;padding:2px 7px;border-radius:var(--radius-sm);font-size:11px;font-weight:700;white-space:nowrap; }
+.stat-chip-up { color:var(--success);background:var(--success-light); }
+.stat-chip-down { color:var(--danger);background:var(--danger-light); }

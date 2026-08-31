@@ -1,10 +1,19 @@
-import { useEffect } from 'react'
+import { useEffect, useMemo } from 'react'
 import { useAppDispatch, useAppSelector } from '../store/hooks'
 import { fetchKPI } from '../store/dashboardSlice'
+import { fetchPesanan } from '../store/pesananSlice'
+import { fetchKliens } from '../store/klienSlice'
+import { fetchPrinters } from '../store/printersSlice'
 import { formatRp, formatTgl } from '../lib/api'
+import { pctChange } from '../lib/trend'
 import { DashboardKPI } from '../types'
 import StatusBadge from '../components/ui/StatusBadge'
 import KpiCard from '../components/ui/KpiCard'
+import ChartCard from '../components/ui/ChartCard'
+import TrendChip from '../components/ui/TrendChip'
+import LineChart, { LineSeries } from '../components/charts/LineChart'
+import BarChart from '../components/charts/BarChart'
+import DonutChart from '../components/charts/DonutChart'
 
 // ── Icons ──────────────────────────────────────────────────────────────────
 
@@ -73,6 +82,37 @@ const modulColor: Record<string, { color: string; light: string }> = {
   Material: { color: 'var(--teal)',     light: 'var(--teal-light)' },
   Keuangan: { color: 'var(--success)',  light: 'var(--success-light)' },
   Sistem:   { color: 'var(--text-muted)', light: 'var(--bg-surface-2)' },
+}
+
+// ── Statistik constants (moved from the old Statistik tab) ──────────────────
+
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Ags', 'Sep', 'Okt', 'Nov', 'Des']
+
+function monthKey(iso?: string): string {
+  return (iso ?? '').substring(0, 7)
+}
+
+interface RevenuePoint {
+  label: string
+  revenue: number
+}
+
+const revenueSeries: LineSeries<RevenuePoint>[] = [
+  { key: 'revenue', label: 'Revenue', color: 'var(--accent)' },
+]
+
+const statusColor: Record<string, string> = {
+  Antrian: 'var(--status-antrian)',
+  Printing: 'var(--status-printing)',
+  Selesai: 'var(--status-selesai)',
+  Dibatalkan: 'var(--status-batal)',
+}
+
+const printerStatusColor: Record<string, string> = {
+  Idle: 'var(--status-idle)',
+  Printing: 'var(--status-printing)',
+  Maintenance: 'var(--status-maintenance)',
+  Rusak: 'var(--status-rusak)',
 }
 
 // ── Sub-components ─────────────────────────────────────────────────────────
@@ -147,10 +187,99 @@ function ActivityTimeline({ items }: { items: DashboardKPI['aktivitasTerbaru'] }
 export default function Dashboard() {
   const dispatch = useAppDispatch()
   const { kpi, status } = useAppSelector((s) => s.dashboard)
+  const pesanans = useAppSelector((s) => s.pesanan.items)
+  const kliens = useAppSelector((s) => s.klien.items)
+  const printers = useAppSelector((s) => s.printers.items)
+  const pesananLoading = useAppSelector((s) => s.pesanan.status === 'loading' && s.pesanan.items.length === 0)
 
-  useEffect(() => { dispatch(fetchKPI()) }, [dispatch])
+  useEffect(() => {
+    dispatch(fetchKPI())
+    dispatch(fetchPesanan())
+    dispatch(fetchKliens())
+    dispatch(fetchPrinters())
+  }, [dispatch])
 
-  if (status === 'loading' && !kpi) return <div className="page-loading"><div className="spinner" /><span>Memuat dashboard...</span></div>
+  // ── Statistik computations (moved from the old Statistik tab) ─────────────
+
+  const selesai = useMemo(() => pesanans.filter(p => p.status === 'Selesai'), [pesanans])
+  const totalRevenue = useMemo(() => selesai.reduce((a, p) => a + p.hargaFinal, 0), [selesai])
+
+  const monthlyAll = useMemo(() => {
+    const map: Record<string, RevenuePoint & { pesanan: number }> = {}
+    for (const p of selesai) {
+      const raw = monthKey(p.createdAt)
+      if (raw.length < 7) continue
+      if (!map[raw]) {
+        const [y, m] = raw.split('-')
+        map[raw] = { label: `${MONTHS[+m - 1]} '${y.slice(2)}`, revenue: 0, pesanan: 0 }
+      }
+      map[raw].revenue += p.hargaFinal
+      map[raw].pesanan++
+    }
+    return Object.entries(map).sort(([a], [b]) => a.localeCompare(b)).map(([, v]) => v)
+  }, [selesai])
+
+  const monthlyData = useMemo<RevenuePoint[]>(() => monthlyAll.slice(-8).map(({ label, revenue }) => ({ label, revenue })), [monthlyAll])
+  const thisMonth = monthlyAll[monthlyAll.length - 1]
+  const lastMonth = monthlyAll[monthlyAll.length - 2]
+
+  const klienMonthlyAll = useMemo(() => {
+    const map: Record<string, number> = {}
+    for (const k of kliens) {
+      const raw = monthKey(k.createdAt)
+      if (raw.length < 7) continue
+      map[raw] = (map[raw] ?? 0) + 1
+    }
+    return Object.entries(map).sort(([a], [b]) => a.localeCompare(b)).map(([, v]) => v)
+  }, [kliens])
+  const thisKlienBaru = klienMonthlyAll[klienMonthlyAll.length - 1] ?? 0
+  const lastKlienBaru = klienMonthlyAll[klienMonthlyAll.length - 2] ?? 0
+
+  const klienData = useMemo(() =>
+    [...kliens].filter(k => k.totalNilai > 0).sort((a, b) => b.totalNilai - a.totalNilai).slice(0, 7)
+      .map(k => ({ label: k.nama.length > 18 ? k.nama.slice(0, 16) + '…' : k.nama, value: k.totalNilai }))
+  , [kliens])
+
+  const materialData = useMemo(() => {
+    const map: Record<string, { label: string; value: number }> = {}
+    for (const p of selesai) {
+      if (p.multiColorData?.length) {
+        for (const e of p.multiColorData) {
+          if (!map[e.materialNama]) map[e.materialNama] = { label: e.materialNama, value: 0 }
+          map[e.materialNama].value += e.beratGram
+        }
+      } else {
+        const key = p.materialNama ?? 'Unknown'
+        if (!map[key]) map[key] = { label: key, value: 0 }
+        map[key].value += p.beratMaterial * 1000
+      }
+    }
+    return Object.values(map).sort((a, b) => b.value - a.value).slice(0, 6)
+      .map(m => ({ ...m, label: m.label.length > 18 ? m.label.slice(0, 16) + '…' : m.label }))
+  }, [selesai])
+
+  const printerData = useMemo(() => {
+    const cnt: Record<string, number> = {}
+    for (const p of selesai) cnt[p.printerId] = (cnt[p.printerId] ?? 0) + 1
+    return [...printers]
+      .map(pr => ({ label: pr.nama.length > 16 ? pr.nama.slice(0, 14) + '…' : pr.nama, value: pr.totalJam, color: printerStatusColor[pr.status] ?? 'var(--text-muted)' }))
+      .sort((a, b) => b.value - a.value)
+  }, [printers, selesai])
+
+  const statusCounts = useMemo(() => {
+    const c = { Antrian: 0, Printing: 0, Selesai: 0, Dibatalkan: 0 }
+    for (const p of pesanans) c[p.status as keyof typeof c]++
+    return c
+  }, [pesanans])
+  const statusData = useMemo(() =>
+    (Object.entries(statusCounts) as [keyof typeof statusCounts, number][])
+      .filter(([, value]) => value > 0)
+      .map(([label, value]) => ({ label, value, color: statusColor[label] }))
+  , [statusCounts])
+  const resolvedCount = statusCounts.Selesai + statusCounts.Dibatalkan
+  const completionRate = resolvedCount > 0 ? (statusCounts.Selesai / resolvedCount) * 100 : 0
+
+  if ((status === 'loading' && !kpi) || pesananLoading) return <div className="page-loading"><div className="spinner" /><span>Memuat dashboard...</span></div>
   if (!kpi) return <div className="alert alert-danger">Gagal memuat data dashboard.</div>
 
   const profit = kpi.profitBulanIni
@@ -185,6 +314,79 @@ export default function Dashboard() {
         <KpiCard label="Pendapatan"  value={formatRp(kpi.totalPendapatanBulanIni)}  color="var(--success)" accent="var(--success)" accentLight="var(--success-light)" icon={<IcPendapatan />} trend={kpi.trendPendapatanPct} />
         <KpiCard label="Pengeluaran" value={formatRp(kpi.totalPengeluaranBulanIni)} color="var(--danger)"  accent="var(--danger)"  accentLight="var(--danger-light)"  icon={<IcPengeluaran />} trend={kpi.trendPengeluaranPct} invertTrend />
         <KpiCard label="Profit"      value={formatRp(profit)}                        color={profitColor}    accent={profitColor}    accentLight={profitLight}           icon={<IcProfit />} trend={kpi.trendProfitPct} />
+      </div>
+
+      {/* Section: Tren & Performa (moved from Statistik) */}
+      <SectionLabel>Tren & Performa</SectionLabel>
+      <div className="animate-fade-up-1 rgrid-main-side" style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 'var(--spacing-md)', alignItems: 'stretch' }}>
+
+        <div className="card" style={{ padding: '20px 22px' }}>
+          <div style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 600, marginBottom: 6 }}>Revenue Bulan Ini</div>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, flexWrap: 'wrap', marginBottom: 16 }}>
+            <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 30, fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.03em' }}>
+              {formatRp(thisMonth?.revenue ?? 0)}
+            </span>
+            <TrendChip change={pctChange(thisMonth?.revenue ?? 0, lastMonth?.revenue ?? 0)} />
+            <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>vs bulan lalu</span>
+          </div>
+          <div style={{ height: 220 }}>
+            <LineChart data={monthlyData} series={revenueSeries} formatValue={formatRp} emptyMessage="Belum cukup data untuk tren revenue" />
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-md)', height: '100%' }}>
+
+          {/* Goal card — tingkat penyelesaian pesanan */}
+          <div style={{
+            flex: 1, borderRadius: 'var(--radius-lg)', padding: '20px 22px',
+            background: 'linear-gradient(160deg,var(--bg-surface-3),var(--bg-surface))',
+            border: '1px solid var(--border)', boxShadow: 'var(--shadow-md)',
+            display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
+          }}>
+            <div>
+              <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.15em', color: 'var(--text-muted)', marginBottom: 8 }}>
+                Kualitas Pengerjaan
+              </div>
+              <div style={{ fontSize: 15, fontFamily: "'Manrope', sans-serif", fontWeight: 700, color: 'var(--text-primary)' }}>Tingkat Penyelesaian</div>
+            </div>
+            <div style={{ marginTop: 18 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8 }}>
+                <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 26, fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.03em' }}>
+                  {resolvedCount > 0 ? `${completionRate.toFixed(0)}%` : '–'}
+                </span>
+                <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{statusCounts.Selesai} dari {resolvedCount} order</span>
+              </div>
+              <div style={{ width: '100%', height: 6, background: 'var(--bg-surface-2)', borderRadius: 'var(--radius-full)', overflow: 'hidden' }}>
+                <div style={{ height: '100%', width: `${completionRate}%`, background: 'linear-gradient(90deg,var(--success),var(--teal))', borderRadius: 'var(--radius-full)' }} />
+              </div>
+            </div>
+          </div>
+
+          {/* Insight card — pertumbuhan klien */}
+          <div className="card" style={{
+            flex: 1, padding: '18px 22px',
+            display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 10,
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <div style={{ width: 32, height: 32, borderRadius: 10, background: 'var(--accent-light)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="var(--accent)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="6" cy="5.5" r="2.5" /><path d="M1 14c0-2.8 2.2-5 5-5 1.2 0 2.3.4 3.2 1" /><circle cx="12" cy="5" r="2" /><path d="M10.5 12.5c.6-1.6 2.4-1.8 4-.5" />
+                </svg>
+              </div>
+              <span style={{ fontSize: 14, fontFamily: "'Manrope', sans-serif", fontWeight: 700, color: 'var(--text-primary)' }}>Pertumbuhan Klien</span>
+            </div>
+            <p style={{ fontSize: 12.5, color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+              {thisKlienBaru > 0 ? (
+                <>Klien baru bulan ini <span style={{ color: 'var(--text-primary)', fontWeight: 700 }}>{thisKlienBaru} klien</span></>
+              ) : (
+                <>Belum ada klien baru bulan ini</>
+              )}
+              {' '}
+              <TrendChip change={pctChange(thisKlienBaru, lastKlienBaru)} />
+              {' '}dibanding bulan lalu.
+            </p>
+          </div>
+        </div>
       </div>
 
       {/* Section: Printer & Material */}
@@ -243,6 +445,33 @@ export default function Dashboard() {
           ))}
         </div>
       )}
+
+      {/* Section: Analisis (moved from Statistik) */}
+      <SectionLabel>Analisis</SectionLabel>
+      <div className="animate-fade-up-2 rgrid-4" style={{ display: 'grid', gridTemplateColumns: '1fr 1.6fr 1fr 1fr', gap: 'var(--spacing-md)' }}>
+        <ChartCard title="Status Pesanan" badge={`${pesanans.length} total`} accent="var(--warning)">
+          <DonutChart data={statusData} centerValue={pesanans.length} centerLabel="Total" />
+        </ChartCard>
+
+        <ChartCard title="Top Klien by Revenue" badge={klienData.length > 0 ? `${klienData.length} klien` : undefined} accent="var(--teal)">
+          <BarChart data={klienData} color="var(--teal)" formatValue={formatRp} />
+        </ChartCard>
+
+        <ChartCard title="Material Terpakai" badge="gram · selesai" accent="var(--violet)">
+          <BarChart data={materialData} color="var(--violet)" formatValue={v => v >= 1000 ? `${(v / 1000).toFixed(1)}kg` : `${v}g`} />
+        </ChartCard>
+
+        <ChartCard title="Utilisasi Printer" badge="jam terpakai" accent="var(--success)">
+          <BarChart data={printerData} formatValue={v => `${v}j`} />
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 10, justifyContent: 'center' }}>
+            {(Object.entries(printerStatusColor) as [string, string][]).map(([label, color]) => (
+              <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: 'var(--text-muted)' }}>
+                <span style={{ width: 6, height: 6, borderRadius: 2, background: color, flexShrink: 0 }} />{label}
+              </div>
+            ))}
+          </div>
+        </ChartCard>
+      </div>
 
       {/* Activity Timeline */}
       <div className="animate-fade-up-3 card" style={{ overflow: 'hidden' }}>

@@ -1,9 +1,9 @@
-export type Page = 'dashboard' | 'pesanan' | 'klien' | 'printer' | 'material' | 'keuangan' | 'statistik' | 'aktivitas' | 'setting'
+export type Page = 'dashboard' | 'pesanan' | 'klien' | 'printer' | 'material' | 'keuangan' | 'aktivitas' | 'setting'
 
 export const pageTitles: Record<Page, string> = {
   dashboard: 'Dashboard', pesanan: 'Manajemen Pesanan', klien: 'Manajemen Klien',
   printer: 'Manajemen Printer', material: 'Manajemen Material',
-  keuangan: 'Keuangan', statistik: 'Statistik', aktivitas: 'Log Aktivitas', setting: 'Pengaturan',
+  keuangan: 'Keuangan', aktivitas: 'Log Aktivitas', setting: 'Pengaturan',
 }
 
 export const navItems: { id: Page; label: string; icon: React.ReactNode }[] = [
@@ -19,8 +19,6 @@ export const navItems: { id: Page; label: string; icon: React.ReactNode }[] = [
     icon: <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M8 1L2 4.5l6 3 6-3L8 1z"/><path d="M2 8l6 3 6-3"/><path d="M2 11.5l6 3 6-3"/></svg> },
   { id: 'keuangan', label: 'Keuangan',
     icon: <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><polyline points="1.5,12 4.5,8 7.5,10 12,4.5"/><polyline points="10,4.5 12,4.5 12,6.5"/></svg> },
-  { id: 'statistik', label: 'Statistik',
-    icon: <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="9" width="3" height="5" rx="0.8"/><rect x="6.5" y="5" width="3" height="9" rx="0.8"/><rect x="11" y="2" width="3" height="12" rx="0.8"/></svg> },
   { id: 'aktivitas', label: 'Aktivitas',
     icon: <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><circle cx="8" cy="8" r="6"/><polyline points="8,5 8,8 10,9.5"/></svg> },
   { id: 'setting', label: 'Setting',
